@@ -1,0 +1,12 @@
+/* Basic global CSS resets */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background-color: #0b0f19;
+}
