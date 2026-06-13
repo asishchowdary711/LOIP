@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -10,6 +11,11 @@ from schemas.db_models import Base
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Allow overriding the DB URL for local dev/testing without Postgres,
+# e.g. DATABASE_URL=sqlite+aiosqlite:///./dev.db
+if database_url := os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata
 
