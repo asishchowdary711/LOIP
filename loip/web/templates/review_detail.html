@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}Review: {{ case.applicant_name }} — LOIP{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <div>
+        <h2>{{ case.applicant_name }}</h2>
+        <span style="color: var(--muted); font-size: 0.85rem;">{{ case.application_id }} &middot; &#8377;{{ "{:,.0f}"|format(case.loan_amount) }}</span>
+    </div>
+    <span class="badge badge-{{ case.system_decision.value }}" style="font-size: 1rem; padding: 0.4em 1em;">
+        {{ case.system_decision.value|upper }}
+    </span>
+</div>
+
+<div class="grid-2">
+    <!-- Left: Extracted Data & Evidence -->
+    <div>
+        {% if decision %}
+        <div class="card">
+            <h2>Identity Verification</h2>
+            <div class="field-row">
+                <span class="label">Confidence</span>
+                <span class="value">
+                    {{ "%.0f"|format(decision.identity_result.identity_confidence * 100) }}%
+                    <span class="confidence-bar"><span class="fill" style="width: {{ decision.identity_result.identity_confidence * 100 }}%; background: {% if decision.identity_result.identity_confidence >= 0.7 %}var(--success){% elif decision.identity_result.identity_confidence >= 0.3 %}var(--warning){% else %}var(--danger){% endif %};"></span></span>
+                </span>
+            </div>
+            <div class="field-row">
+                <span class="label">PAN Verified</span>
+                <span class="value">{% if decision.identity_result.pan_verified %}Yes{% else %}No{% endif %}</span>
+            </div>
+            <div class="field-row">
+                <span class="label">Aadhaar Verified</span>
+                <span class="value">{% if decision.identity_result.aadhaar_verified %}Yes{% else %}No{% endif %}</span>
+            </div>
+            {% if decision.identity_result.tamper_flags %}
+            <div style="margin-top: 0.5rem;">
+                {% for flag in decision.identity_result.tamper_flags %}
+                <span class="badge badge-reject" style="margin: 0.15rem;">{{ flag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Income Assessment</h2>
+            <div class="field-row">
+                <span class="label">Verified Monthly Income</span>
+                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.income_result.verified_monthly_income) }}</span>
+            </div>
+            <div class="field-row">
+                <span class="label">Income Confidence</span>
+                <span class="value">{{ "%.0f"|format(decision.income_result.income_confidence * 100) }}%</span>
+            </div>
+            <div class="field-row">
+                <span class="label">Segment</span>
+                <span class="value">{{ decision.income_result.segment|title }}</span>
+            </div>
+            {% if decision.income_result.anomaly_flags %}
+            <div style="margin-top: 0.5rem;">
+                {% for flag in decision.income_result.anomaly_flags %}
+                <span class="badge badge-review" style="margin: 0.15rem;">{{ flag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Affordability</h2>
+            <div class="field-row">
+                <span class="label">FOIR</span>
+                <span class="value" style="color: {% if decision.affordability_result.foir <= 0.50 %}var(--success){% elif decision.affordability_result.foir <= 0.60 %}var(--warning){% else %}var(--danger){% endif %};">
+                    {{ "%.0f"|format(decision.affordability_result.foir * 100) }}%
+                </span>
+            </div>
+            <div class="field-row">
+                <span class="label">Existing Obligations</span>
+                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.affordability_result.existing_obligations) }}/mo</span>
+            </div>
+            <div class="field-row">
+                <span class="label">Proposed EMI</span>
+                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.affordability_result.proposed_emi) }}/mo</span>
+            </div>
+            <div class="field-row">
+                <span class="label">Disposable Income</span>
+                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.affordability_result.disposable_income) }}/mo</span>
+            </div>
+            <div class="field-row">
+                <span class="label">Cashflow Stability</span>
+                <span class="value">{{ "%.0f"|format(decision.affordability_result.cashflow_stability * 100) }}%</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Credit Bureau</h2>
+            <div class="field-row">
+                <span class="label">CIBIL Score</span>
+                <span class="value" style="font-size: 1.25rem; color: {% if decision.bureau_result.score >= 750 %}var(--success){% elif decision.bureau_result.score >= 700 %}var(--warning){% else %}var(--danger){% endif %};">
+                    {{ decision.bureau_result.score }}
+                </span>
+            </div>
+            <div class="field-row">
+                <span class="label">Active Loans</span>
+                <span class="value">{{ decision.bureau_result.active_loans }}</span>
+            </div>
+            <div class="field-row">
+                <span class="label">Overdue Accounts</span>
+                <span class="value">{{ decision.bureau_result.overdue_accounts }}</span>
+            </div>
+            <div class="field-row">
+                <span class="label">DPD 90+</span>
+                <span class="value">{% if decision.bureau_result.dpd_90_plus %}Yes{% else %}No{% endif %}</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right: Explainability + Decision Panel -->
+    <div>
+        {% if explainability and explainability.shap_explanations %}
+        <div class="card">
+            <h2>Risk Factors (SHAP)</h2>
+            {% for shap in explainability.shap_explanations %}
+            <div style="margin-bottom: 0.75rem;">
+                <div style="font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem;">{{ shap.model_name }}</div>
+                {% for contrib in shap.top_positive %}
+                <div class="shap-bar">
+                    <span style="width: 140px; font-size: 0.8rem;">{{ contrib.feature_name }}</span>
+                    <span class="bar shap-positive" style="width: {{ (contrib.shap_value * 300)|abs }}px;"></span>
+                    <span style="font-size: 0.75rem; color: var(--success);">+{{ "%.3f"|format(contrib.shap_value) }}</span>
+                </div>
+                {% endfor %}
+                {% for contrib in shap.top_negative %}
+                <div class="shap-bar">
+                    <span style="width: 140px; font-size: 0.8rem;">{{ contrib.feature_name }}</span>
+                    <span class="bar shap-negative" style="width: {{ (contrib.shap_value * 300)|abs }}px;"></span>
+                    <span style="font-size: 0.75rem; color: var(--danger);">{{ "%.3f"|format(contrib.shap_value) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if explainability and explainability.copilot %}
+        <div class="card">
+            <h2>AI Copilot Assessment</h2>
+            <p style="margin-bottom: 0.75rem;">{{ explainability.copilot.profile_summary }}</p>
+            <div style="margin-bottom: 0.75rem;">
+                <strong style="font-size: 0.8rem;">Primary Reason:</strong>
+                <div>{{ explainability.copilot.primary_decision_reason }}</div>
+            </div>
+            {% if explainability.copilot.inconsistencies %}
+            <div style="margin-bottom: 0.75rem;">
+                <strong style="font-size: 0.8rem;">Inconsistencies:</strong>
+                <ul style="margin: 0.25rem 0 0 1.25rem; font-size: 0.875rem;">
+                    {% for item in explainability.copilot.inconsistencies %}
+                    <li style="color: var(--danger);">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if explainability.copilot.reviewer_questions %}
+            <div>
+                <strong style="font-size: 0.8rem;">Questions to Verify:</strong>
+                <ul style="margin: 0.25rem 0 0 1.25rem; font-size: 0.875rem;">
+                    {% for q in explainability.copilot.reviewer_questions %}
+                    <li>{{ q }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--muted);">
+                Generated by {{ explainability.copilot.model_id }} at {{ explainability.copilot.generated_at.strftime('%Y-%m-%d %H:%M') }}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if case.review_flags %}
+        <div class="card">
+            <h2>Review Flags</h2>
+            {% for flag in case.review_flags %}
+            <span class="badge badge-review" style="margin: 0.15rem;">{{ flag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Decision Panel -->
+        <div class="card" style="border-color: var(--primary);">
+            <h2>Decision Override</h2>
+            {% if case.status.value == 'completed' %}
+            <div class="alert alert-info">This case has been completed.</div>
+            {% else %}
+            <form method="POST" action="/ui/review/{{ case.case_id }}/override">
+                <label for="override_decision">Override Decision</label>
+                <select name="override_decision" id="override_decision" required>
+                    <option value="">-- Select --</option>
+                    <option value="approve">Approve</option>
+                    <option value="reject">Reject</option>
+                    <option value="escalate">Escalate</option>
+                </select>
+
+                <label for="reason_code">Reason Code</label>
+                <select name="reason_code" id="reason_code" required>
+                    <option value="">-- Select --</option>
+                    <option value="income_verified_manually">Income Verified Manually</option>
+                    <option value="identity_confirmed_by_vkyc">Identity Confirmed by V-KYC</option>
+                    <option value="employer_verified_externally">Employer Verified Externally</option>
+                    <option value="documents_resubmitted">Documents Resubmitted</option>
+                    <option value="fraud_confirmed">Fraud Confirmed</option>
+                    <option value="additional_collateral">Additional Collateral</option>
+                    <option value="policy_exception">Policy Exception</option>
+                    <option value="data_entry_error">Data Entry Error</option>
+                    <option value="system_error_correction">System Error Correction</option>
+                    <option value="other">Other</option>
+                </select>
+
+                <label for="notes">Notes (mandatory, min 10 characters)</label>
+                <textarea name="notes" id="notes" required minlength="10" placeholder="Provide justification for this override..."></textarea>
+
+                <input type="hidden" name="reviewer_id" value="reviewer_01">
+
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                    <button type="submit" class="btn btn-primary">Submit Override</button>
+                    <a href="/ui/queue" class="btn btn-outline">Back to Queue</a>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

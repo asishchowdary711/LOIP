@@ -19,6 +19,7 @@ class IdentityFlag(StrEnum):
     DOCUMENT_METADATA_ANOMALY = "document_metadata_anomaly"
     ADDRESS_STATE_MISMATCH = "address_state_mismatch"
     SPOOF_DETECTED = "spoof_detected"
+    FACE_MISMATCH = "face_mismatch"
 
 
 class APIVerificationResult(BaseModel):
@@ -42,6 +43,10 @@ class IdentityVerificationResult(BaseModel):
     identity_confidence: float = Field(ge=0.0, le=1.0)
     pan_verified: bool = False
     aadhaar_verified: bool = False
+    face_verified: bool = False
+    liveness_verified: bool = False
+    face_match_score: float | None = None
+    liveness_score: float | None = None
     entity_matches: list[EntityMatch] = Field(default_factory=list)
     api_results: list[APIVerificationResult] = Field(default_factory=list)
     tamper_flags: list[IdentityFlag] = Field(default_factory=list)

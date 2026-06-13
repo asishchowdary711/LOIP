@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Review Queue — LOIP{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Review Queue</h2>
+
+<div class="grid-3" style="margin-bottom: 1.5rem;">
+    <div class="card stat-card">
+        <div class="value">{{ summary.total_pending }}</div>
+        <div class="label">Pending</div>
+    </div>
+    <div class="card stat-card">
+        <div class="value">{{ summary.total_in_progress }}</div>
+        <div class="label">In Progress</div>
+    </div>
+    <div class="card stat-card">
+        <div class="value">{{ "%.0f"|format(summary.avg_age_minutes) }}m</div>
+        <div class="label">Avg Age</div>
+    </div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Applicant</th>
+                <th>Loan Amount</th>
+                <th>Decision</th>
+                <th>FOIR</th>
+                <th>CIBIL</th>
+                <th>Risk Score</th>
+                <th>Primary Reason</th>
+                <th>Status</th>
+                <th>Age</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for case in cases %}
+            <tr>
+                <td>{{ case.applicant_name }}</td>
+                <td>&#8377;{{ "{:,.0f}"|format(case.loan_amount) }}</td>
+                <td><span class="badge badge-{{ case.system_decision.value }}">{{ case.system_decision.value|upper }}</span></td>
+                <td>{% if case.foir is not none %}{{ "%.0f"|format(case.foir * 100) }}%{% else %}-{% endif %}</td>
+                <td>{{ case.cibil_score or '-' }}</td>
+                <td>{% if case.risk_score is not none %}{{ "%.2f"|format(case.risk_score) }}{% else %}-{% endif %}</td>
+                <td style="font-size: 0.8rem; color: var(--muted);">{{ case.primary_reason_code or '-' }}</td>
+                <td><span class="badge badge-{{ case.status.value }}">{{ case.status.value|replace('_', ' ')|title }}</span></td>
+                <td>{{ case.age_in_queue_minutes }}m</td>
+                <td><a href="/ui/review/{{ case.case_id }}" class="btn btn-outline">Review</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="10" style="text-align: center; color: var(--muted); padding: 2rem;">No cases in queue</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
