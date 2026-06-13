@@ -8,9 +8,7 @@ from datetime import date
 from pathlib import Path
 
 import click
-from fpdf import FPDF
-
-from .base import fake, generate_pan, save_metadata
+from .base import IndianFPDF, fake, generate_pan, save_metadata
 
 
 def generate_itr(
@@ -80,10 +78,10 @@ def generate_itr(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    pdf = FPDF()
+    pdf = IndianFPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 10, f"Income Tax Return — {itr_type}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, f"Income Tax Return - {itr_type}", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(0, 6, f"Assessment Year: {assessment_year}", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)

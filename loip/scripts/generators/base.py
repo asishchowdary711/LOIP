@@ -10,8 +10,32 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from faker import Faker
+from fpdf import FPDF
 
 fake = Faker("en_IN")
+
+# fpdf2's built-in Helvetica font only supports latin-1, but Faker (en_IN) can
+# emit names/addresses with typographic Unicode punctuation (curly quotes,
+# en/em dashes, ellipsis) that latin-1 can't represent and fpdf raises on.
+_UNICODE_TO_ASCII = {
+    "‘": "'", "’": "'",
+    "“": '"', "”": '"',
+    "–": "-", "—": "-",
+    "…": "...",
+}
+
+
+def sanitize_text(text: str) -> str:
+    for unicode_char, ascii_char in _UNICODE_TO_ASCII.items():
+        text = text.replace(unicode_char, ascii_char)
+    return text
+
+
+class IndianFPDF(FPDF):
+    """FPDF subclass that sanitizes Unicode punctuation before rendering."""
+
+    def normalize_text(self, text):
+        return super().normalize_text(sanitize_text(text))
 
 INDIAN_STATES = [
     "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",

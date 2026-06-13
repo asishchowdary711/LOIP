@@ -8,10 +8,10 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import click
-from fpdf import FPDF
 
 from .base import (
     BANK_NAMES,
+    IndianFPDF,
     fake,
     random_indian_address,
     save_metadata,
@@ -119,7 +119,7 @@ def _generate_transactions(
     return transactions, round(balance, 2)
 
 
-class BankStatementPDF(FPDF):
+class BankStatementPDF(IndianFPDF):
     def __init__(self, fields: dict):
         super().__init__()
         self.fields = fields

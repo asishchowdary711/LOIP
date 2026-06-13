@@ -8,9 +8,9 @@ from datetime import date
 from pathlib import Path
 
 import click
-from fpdf import FPDF
 
 from .base import (
+    IndianFPDF,
     fake,
     generate_pan,
     generate_uan,
@@ -20,7 +20,7 @@ from .base import (
 )
 
 
-class SalarySlipPDF(FPDF):
+class SalarySlipPDF(IndianFPDF):
     def __init__(self, fields: dict):
         super().__init__()
         self.fields = fields
@@ -57,6 +57,12 @@ class SalarySlipPDF(FPDF):
             self.cell(col_w - 30, 6, str(right[1]), new_x="LMARGIN", new_y="NEXT")
         self.ln(5)
 
+    @staticmethod
+    def _fmt_amount(value) -> str:
+        if isinstance(value, (int, float)):
+            return f"{value:,.0f}"
+        return str(value)
+
     def _add_earnings_deductions(self):
         self.set_font("Helvetica", "B", 10)
         self.set_fill_color(220, 220, 220)
@@ -80,27 +86,31 @@ class SalarySlipPDF(FPDF):
         for i in range(max_rows):
             if i < len(earnings):
                 self.cell(60, 6, earnings[i][0], border="L")
-                self.cell(35, 6, f"{earnings[i][1]:,.0f}", border="R", align="R", new_x="RIGHT")
+                self.cell(35, 6, self._fmt_amount(earnings[i][1]), border="R", align="R", new_x="RIGHT")
             else:
                 self.cell(95, 6, "", border="LR", new_x="RIGHT")
 
             if i < len(deductions):
                 self.cell(60, 6, deductions[i][0], border="L")
-                self.cell(35, 6, f"{deductions[i][1]:,.0f}", border="R", align="R", new_x="LMARGIN", new_y="NEXT")
+                self.cell(35, 6, self._fmt_amount(deductions[i][1]), border="R", align="R", new_x="LMARGIN", new_y="NEXT")
             else:
                 self.cell(95, 6, "", border="LR", new_x="LMARGIN", new_y="NEXT")
 
         self.set_font("Helvetica", "B", 9)
         self.set_fill_color(240, 240, 240)
         self.cell(60, 7, "Total Earnings", border=1, fill=True)
-        self.cell(35, 7, f"{self.fields['gross_pay']:,.0f}", border=1, fill=True, align="R", new_x="RIGHT")
-        total_deductions = self.fields["pf_deduction"] + self.fields["professional_tax"] + self.fields["tds_deduction"]
+        self.cell(35, 7, self._fmt_amount(self.fields["gross_pay"]), border=1, fill=True, align="R", new_x="RIGHT")
+        numeric_deductions = [
+            v for v in (self.fields["pf_deduction"], self.fields["professional_tax"], self.fields["tds_deduction"])
+            if isinstance(v, (int, float))
+        ]
+        total_deductions = sum(numeric_deductions)
         self.cell(60, 7, "Total Deductions", border=1, fill=True)
-        self.cell(35, 7, f"{total_deductions:,.0f}", border=1, fill=True, align="R", new_x="LMARGIN", new_y="NEXT")
+        self.cell(35, 7, self._fmt_amount(total_deductions), border=1, fill=True, align="R", new_x="LMARGIN", new_y="NEXT")
 
         self.ln(5)
         self.set_font("Helvetica", "B", 11)
-        self.cell(0, 8, f"Net Pay: INR {self.fields['net_pay']:,.0f}", align="C", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 8, f"Net Pay: INR {self._fmt_amount(self.fields['net_pay'])}", align="C", new_x="LMARGIN", new_y="NEXT")
         self.set_font("Helvetica", "I", 8)
         self.cell(0, 6, "This is a computer-generated document and does not require a signature.", align="C", new_x="LMARGIN", new_y="NEXT")
 
