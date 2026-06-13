@@ -1,0 +1,16 @@
+PORT=5000
+DB_USER=vijaym
+DB_HOST=postgresql.ibaseit.com
+DB_PORT=5432
+DB_NAME=ib_vijay
+# DB_PASSWORD=postgres
+DB_PASSWORD=Pa$$wRpO$q1LaZ%
+JWT_SECRET=super-secret-key-1234-loan-platform
+# ENCRYPTION_KEY must be a 64-character hex string (32 bytes)
+ENCRYPTION_KEY=637f96c21e64e5c8a4b3d7e5f1b2c4d6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8
+
+
+# postgresql://postgres:[Digital_loan@123$456]@db.sutpkmwaeiegkwemayev.supabase.co:5432/postgres
+
+OPENROUTER_API_KEY=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
+OPENROUTER_MODEL=google/gemini-2.5-flash
