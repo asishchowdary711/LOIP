@@ -39,7 +39,7 @@ def _init_ocr() -> PaddleOCR:
             "paddleocr is required for annotation generation. "
             "Install with: pip install paddleocr"
         )
-    return PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+    return PaddleOCR(use_textline_orientation=True, lang="en")
 
 
 def _normalize_bbox(
@@ -53,6 +53,36 @@ def _normalize_bbox(
         int(max(xs) / img_width * 1000),
         int(max(ys) / img_height * 1000),
     ]
+
+
+def _split_line_into_word_tokens(
+    text: str, line_bbox: list[int], confidence: float
+) -> list[dict]:
+    """Split a PaddleOCR line-level result into word tokens with estimated bboxes.
+
+    PaddleOCR returns one bbox per recognized line, but ground-truth field
+    matching is done at the word/phrase level, so each line is split on
+    whitespace and its bbox divided proportionally by character width.
+    """
+    words = text.split()
+    if not words:
+        return []
+
+    x0, y0, x1, y1 = line_bbox
+    total_chars = sum(len(w) for w in words)
+    width = x1 - x0
+    tokens = []
+    cursor = x0
+    for word in words:
+        word_width = round(width * len(word) / total_chars) if total_chars else 0
+        tokens.append({
+            "text": word,
+            "bbox": [cursor, y0, cursor + word_width, y1],
+            "confidence": confidence,
+            "label": "O",
+        })
+        cursor += word_width
+    return tokens
 
 
 def _fuzzy_match(ocr_text: str, gt_value: str, exact: bool = False) -> bool:
@@ -157,24 +187,21 @@ def annotate_document(
     img = Image.open(image_path)
     img_width, img_height = img.size
 
-    result = ocr_engine.ocr(str(image_path), cls=True)
+    result = ocr_engine.predict(str(image_path))
 
     doc_type = metadata.get("document_type", "unknown")
     gt_entries = _build_gt_lookup(metadata, doc_type)
 
     tokens: list[dict] = []
-    if result and result[0]:
-        for line in result[0]:
-            bbox_raw, (text, confidence) = line
+    if result:
+        page = result[0]
+        for text, confidence, bbox_raw in zip(
+            page["rec_texts"], page["rec_scores"], page["rec_polys"], strict=True
+        ):
             if confidence < 0.5:
                 continue
-            norm_bbox = _normalize_bbox(bbox_raw, img_width, img_height)
-            tokens.append({
-                "text": text,
-                "bbox": norm_bbox,
-                "confidence": confidence,
-                "label": "O",
-            })
+            line_bbox = _normalize_bbox(bbox_raw, img_width, img_height)
+            tokens.extend(_split_line_into_word_tokens(text, line_bbox, confidence))
 
     matched_fields: set[str] = set()
 
@@ -277,6 +304,7 @@ def annotate_directory(
         image_patterns = [
             f"{doc_type}_{doc_id}.png",
             f"{doc_type}_{doc_id}.pdf",
+            f"{doc_type}_front_{doc_id}.png",
             f"{doc_type}_{doc_id}_front.png",
         ]
         image_path = None

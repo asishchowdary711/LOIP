@@ -10,6 +10,7 @@ build/
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
 
@@ -32,6 +33,7 @@ Thumbs.db
 # Data & models (large files)
 loip/data/
 loip/output/
+loip/logs/
 *.h5
 *.pt
 *.onnx
