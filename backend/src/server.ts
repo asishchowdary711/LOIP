@@ -16,7 +16,9 @@ import {
   requestDocs,
   getBureauReport,
   getRiskDetails,
-  uploadMiddleware
+  uploadMiddleware,
+  deleteDocument,
+  uploadSingleDocument
 } from './controllers/loanController';
 import { sseClients } from './engines';
 
@@ -39,8 +41,10 @@ app.post('/api/loans', authenticateToken as any, uploadMiddleware, applyLoan as 
 app.get('/api/loans', authenticateToken as any, getLoans as any);
 app.get('/api/loans/:id', authenticateToken as any, getLoanById as any);
 
-// --- Document Downloader (Decrypted-at-Rest Streaming) ---
+// --- Document Downloader & Modifier (Decrypted-at-Rest Streaming & Management) ---
 app.get('/api/documents/:id', authenticateToken as any, getDocumentContent as any);
+app.delete('/api/documents/:id', authenticateToken as any, deleteDocument as any);
+app.post('/api/loans/:loanId/documents', authenticateToken as any, uploadMiddleware, uploadSingleDocument as any);
 
 // --- Credit Bureau & Risk Accessors ---
 app.get('/api/bureau/:loanId', authenticateToken as any, getBureauReport as any);

@@ -1,5 +1,4 @@
 import { Pool } from 'pg';
-import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -135,28 +134,7 @@ export async function initializeDatabase() {
 
     console.log('Tables verified/created successfully.');
 
-    // Seed default admin and user if not exists
-    const adminCheck = await client.query(`SELECT 1 FROM users WHERE email = $1`, ['admin@digital-loan.com']);
-    if (adminCheck.rowCount === 0) {
-      console.log('Seeding default admin user...');
-      const adminHash = bcrypt.hashSync('admin123', 10);
-      await client.query(
-        `INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4)`,
-        ['Default Admin', 'admin@digital-loan.com', adminHash, 'admin']
-      );
-    }
-
-    const userCheck = await client.query(`SELECT 1 FROM users WHERE email = $1`, ['user@digital-loan.com']);
-    if (userCheck.rowCount === 0) {
-      console.log('Seeding default standard user...');
-      const userHash = bcrypt.hashSync('user123', 10);
-      await client.query(
-        `INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4)`,
-        ['Jane Doe', 'user@digital-loan.com', userHash, 'user']
-      );
-    }
-
-    console.log('Database seeding complete.');
+    console.log('Database initialization complete.');
   } catch (error) {
     console.error('Error initializing tables/seeding:', error);
   } finally {

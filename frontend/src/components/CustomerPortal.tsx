@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, TextField, Button, Card, CardContent,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  IconButton, Alert, List, ListItem, ListItemIcon, ListItemText
+  IconButton, Alert, List, ListItem, ListItemIcon, ListItemText,
+  Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import {
   CloudUpload, History, PlayCircle, CheckCircle, HourglassEmpty, HighlightOff,
-  VideoCameraFront, DoneAll, ArrowBack, Refresh
+  VideoCameraFront, DoneAll, ArrowBack, Refresh, Delete, Visibility
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -32,10 +33,10 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
 
   // Apply Form State
   const [loanAmount, setLoanAmount] = useState('150000');
-  const [name, setName] = useState('Jane Doe');
-  const [dob, setDob] = useState('15-08-1995');
-  const [declaredIncome, setDeclaredIncome] = useState('85000');
-  const [employer, setEmployer] = useState('Fintech Innovators Pvt Ltd');
+  const [name, setName] = useState('');
+  const [dob, setDob] = useState('');
+  const [declaredIncome, setDeclaredIncome] = useState('');
+  const [employer, setEmployer] = useState('');
 
   // Document Uploads State
   const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
@@ -44,6 +45,9 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
   const [bankFile, setBankFile] = useState<File | null>(null);
   const [addressFile, setAddressFile] = useState<File | null>(null);
   const [livenessFile, setLivenessFile] = useState<File | null>(null);
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, { id: string; document_type: string }>>({});
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<string | null>(null);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
 
@@ -88,6 +92,41 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
       fetchLoans();
     }
   }, [view]);
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!token) return;
+      try {
+        const res = await axios.get(`${backendUrl}/api/auth/profile`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.data.latestApplicantData) {
+          const data = res.data.latestApplicantData;
+          if (data.name) setName(data.name);
+          if (data.dob) setDob(data.dob);
+          if (data.declaredIncome) setDeclaredIncome(String(data.declaredIncome));
+          if (data.employer) setEmployer(data.employer);
+        }
+        const isLoanActive = res.data.latestLoanStatus && !['approved', 'rejected'].includes(res.data.latestLoanStatus);
+        if (res.data.latestLoanId && isLoanActive) {
+          setActiveLoanId(res.data.latestLoanId);
+          if (res.data.latestDocuments) {
+            const docsMap: Record<string, { id: string; document_type: string }> = {};
+            res.data.latestDocuments.forEach((doc: any) => {
+              docsMap[doc.document_type] = doc;
+            });
+            setUploadedDocs(docsMap);
+          }
+        } else {
+          setActiveLoanId(null);
+          setUploadedDocs({});
+        }
+      } catch (err) {
+        console.error('Error loading profile applicant data:', err);
+      }
+    };
+    fetchProfileData();
+  }, [token, backendUrl, setActiveLoanId]);
 
   // Handle SSE connection for live tracking
   useEffect(() => {
@@ -162,7 +201,7 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
         recorder = new MediaRecorder(mediaStream); // fallback
       }
 
-      const chunks: Blob[] = [];
+       const chunks: Blob[] = [];
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           chunks.push(event.data);
@@ -172,7 +211,11 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
       recorder.onstop = () => {
         const videoBlob = new Blob(chunks, { type: 'video/webm' });
         const videoFile = new File([videoBlob], 'liveness_video.webm', { type: 'video/webm' });
-        setLivenessFile(videoFile);
+        if (activeLoanId) {
+          handleDirectUpload('liveness_video', videoFile);
+        } else {
+          setLivenessFile(videoFile);
+        }
         console.log('Liveness video saved successfully, size:', videoFile.size);
       };
 
@@ -217,7 +260,11 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
             
             const mockBlob = new Blob(['Simulated WebM Liveness Challenge Video Data'], { type: 'video/webm' });
             const mockFile = new File([mockBlob], 'liveness_video.webm', { type: 'video/webm' });
-            setLivenessFile(mockFile);
+            if (activeLoanId) {
+              handleDirectUpload('liveness_video', mockFile);
+            } else {
+              setLivenessFile(mockFile);
+            }
             console.log('Simulated liveness video saved successfully.');
           }
           return next;
@@ -226,13 +273,137 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
     }
   };
 
+  const handleDeleteDoc = async (docType: string) => {
+    const doc = uploadedDocs[docType];
+    if (!doc) return;
+    setLoading(true);
+    try {
+      await axios.delete(`${backendUrl}/api/documents/${doc.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUploadedDocs(prev => {
+        const next = { ...prev };
+        delete next[docType];
+        return next;
+      });
+      // Clear corresponding local state
+      if (docType === 'aadhaar') setAadhaarFile(null);
+      if (docType === 'pan') setPanFile(null);
+      if (docType === 'payslip') setPayslipFile(null);
+      if (docType === 'bank_statement') setBankFile(null);
+      if (docType === 'address_proof') setAddressFile(null);
+      if (docType === 'liveness_video') setLivenessFile(null);
+      
+      setMessage({ type: 'success', text: `${docType.toUpperCase()} document removed successfully.` });
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to delete document.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePreview = async (docType: string) => {
+    const doc = uploadedDocs[docType];
+    if (!doc) return;
+    setLoading(true);
+    try {
+      const res = await axios.get(`${backendUrl}/api/documents/${doc.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: (res.headers['content-type'] as string) || 'application/pdf' });
+      const objectUrl = URL.createObjectURL(blob);
+      setPreviewUrl(objectUrl);
+      setPreviewType(docType);
+    } catch (err) {
+      console.error('Error fetching preview blob:', err);
+      setMessage({ type: 'error', text: 'Failed to load document preview.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileSelect = async (docType: string, file: File | null) => {
+    if (!file) return;
+    if (activeLoanId) {
+      await handleDirectUpload(docType, file);
+    } else {
+      if (docType === 'aadhaar') setAadhaarFile(file);
+      if (docType === 'pan') setPanFile(file);
+      if (docType === 'payslip') setPayslipFile(file);
+      if (docType === 'bank_statement') setBankFile(file);
+      if (docType === 'address_proof') setAddressFile(file);
+    }
+  };
+
+  const handleDirectUpload = async (docType: string, file: File) => {
+    if (!activeLoanId) return;
+    setLoading(true);
+    const formData = new FormData();
+    formData.append(docType, file);
+    formData.append('documentType', docType);
+    try {
+      const res = await axios.post(`${backendUrl}/api/loans/${activeLoanId}/documents`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      const docId = res.data.documentId;
+      setUploadedDocs(prev => ({
+        ...prev,
+        [docType]: { id: docId, document_type: docType }
+      }));
+      if (docType === 'aadhaar') setAadhaarFile(file);
+      if (docType === 'pan') setPanFile(file);
+      if (docType === 'payslip') setPayslipFile(file);
+      if (docType === 'bank_statement') setBankFile(file);
+      if (docType === 'address_proof') setAddressFile(file);
+      if (docType === 'liveness_video') setLivenessFile(file);
+      
+      setMessage({ type: 'success', text: `Document ${docType.toUpperCase()} updated and re-queued for AI verification.` });
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: err.response?.data?.error || 'Document replacement failed.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
 
-    if (!aadhaarFile || !panFile || !payslipFile || !bankFile || !addressFile || !livenessFile) {
-      setMessage({ type: 'error', text: 'Please upload Aadhaar, PAN, Payslips, Bank Statement, Address Proof, and complete the Liveness Challenge.' });
+    if (activeLoanId) {
+      try {
+        await axios.post(`${backendUrl}/api/processing/start/${activeLoanId}`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setMessage({ type: 'success', text: 'AI processing pipeline successfully re-triggered.' });
+        setView('tracking');
+      } catch (err: any) {
+        console.error(err);
+        setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to trigger verification.' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const docKeys = ['aadhaar', 'pan', 'payslip', 'bank_statement', 'address_proof', 'liveness_video'];
+    const missingDocs = docKeys.filter(key => !uploadedDocs[key] && !(
+      key === 'aadhaar' ? aadhaarFile :
+      key === 'pan' ? panFile :
+      key === 'payslip' ? payslipFile :
+      key === 'bank_statement' ? bankFile :
+      key === 'address_proof' ? addressFile :
+      key === 'liveness_video' ? livenessFile : null
+    ));
+
+    if (missingDocs.length > 0) {
+      setMessage({ type: 'error', text: `Please upload/complete the missing documents: ${missingDocs.map(d => d.toUpperCase()).join(', ')}` });
       setLoading(false);
       return;
     }
@@ -245,12 +416,12 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
     formData.append('employer', employer);
     formData.append('challenges', JSON.stringify(challengesCompleted.length ? challengesCompleted : ['SMILED', 'BLINKED']));
 
-    formData.append('aadhaar', aadhaarFile);
-    formData.append('pan', panFile);
-    formData.append('payslip', payslipFile);
-    formData.append('bank_statement', bankFile);
-    formData.append('address_proof', addressFile);
-    formData.append('liveness_video', livenessFile);
+    if (aadhaarFile) formData.append('aadhaar', aadhaarFile);
+    if (panFile) formData.append('pan', panFile);
+    if (payslipFile) formData.append('payslip', payslipFile);
+    if (bankFile) formData.append('bank_statement', bankFile);
+    if (addressFile) formData.append('address_proof', addressFile);
+    if (livenessFile) formData.append('liveness_video', livenessFile);
 
     try {
       const res = await axios.post(`${backendUrl}/api/loans`, formData, {
@@ -327,7 +498,6 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     margin="normal"
-                    required
                   />
 
                   <TextField
@@ -336,7 +506,6 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
                     margin="normal"
-                    required
                   />
 
                   <TextField
@@ -345,7 +514,6 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
                     value={declaredIncome}
                     onChange={(e) => setDeclaredIncome(e.target.value)}
                     margin="normal"
-                    required
                   />
 
                   <TextField
@@ -354,7 +522,6 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
                     value={employer}
                     onChange={(e) => setEmployer(e.target.value)}
                     margin="normal"
-                    required
                   />
                 </CardContent>
               </Card>
@@ -399,6 +566,15 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
                           <Box className="webcam-overlay" component="div" />
                           <Typography variant="caption" sx={{ position: 'absolute', bottom: 10, color: '#9ca3af' }}>[Headless Sandbox Simulation]</Typography>
                         </>
+                      ) : uploadedDocs['liveness_video'] ? (
+                        <Box component="div" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                          <CheckCircle sx={{ fontSize: 60, color: '#10b981' }} />
+                          <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 'bold' }}>Liveness Video Submitted!</Typography>
+                          <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                            <Button size="small" variant="outlined" onClick={() => handlePreview('liveness_video')} startIcon={<Visibility />}>Preview</Button>
+                            <IconButton color="error" onClick={() => handleDeleteDoc('liveness_video')} size="small"><Delete /></IconButton>
+                          </Box>
+                        </Box>
                       ) : livenessFile ? (
                         <Box component="div" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                           <CheckCircle sx={{ fontSize: 60, color: '#10b981' }} />
@@ -447,46 +623,86 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
                   {/* Aadhaar */}
                   <Box component="div" sx={{ mb: 2 }}>
                     <Typography variant="body2" sx={{ mb: 1 }}>Aadhaar Card *</Typography>
-                    <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
-                      {aadhaarFile ? aadhaarFile.name : 'Upload Aadhaar PDF/Image'}
-                      <input type="file" hidden onChange={(e) => setAadhaarFile(e.target.files?.[0] || null)} required />
-                    </Button>
+                    {uploadedDocs['aadhaar'] ? (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', p: 1, border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+                        <Typography variant="body2" sx={{ color: '#10b981', flexGrow: 1, fontWeight: 'bold' }}>✓ Aadhaar Card Submitted</Typography>
+                        <Button size="small" variant="outlined" onClick={() => handlePreview('aadhaar')} startIcon={<Visibility />}>Preview</Button>
+                        <IconButton color="error" onClick={() => handleDeleteDoc('aadhaar')} size="small"><Delete /></IconButton>
+                      </Box>
+                    ) : (
+                      <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
+                        {aadhaarFile ? aadhaarFile.name : 'Upload Aadhaar PDF/Image'}
+                        <input type="file" hidden onChange={(e) => handleFileSelect('aadhaar', e.target.files?.[0] || null)} />
+                      </Button>
+                    )}
                   </Box>
 
                   {/* PAN */}
                   <Box component="div" sx={{ mb: 2 }}>
                     <Typography variant="body2" sx={{ mb: 1 }}>PAN Card *</Typography>
-                    <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
-                      {panFile ? panFile.name : 'Upload PAN PDF/Image'}
-                      <input type="file" hidden onChange={(e) => setPanFile(e.target.files?.[0] || null)} required />
-                    </Button>
+                    {uploadedDocs['pan'] ? (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', p: 1, border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+                        <Typography variant="body2" sx={{ color: '#10b981', flexGrow: 1, fontWeight: 'bold' }}>✓ PAN Card Submitted</Typography>
+                        <Button size="small" variant="outlined" onClick={() => handlePreview('pan')} startIcon={<Visibility />}>Preview</Button>
+                        <IconButton color="error" onClick={() => handleDeleteDoc('pan')} size="small"><Delete /></IconButton>
+                      </Box>
+                    ) : (
+                      <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
+                        {panFile ? panFile.name : 'Upload PAN PDF/Image'}
+                        <input type="file" hidden onChange={(e) => handleFileSelect('pan', e.target.files?.[0] || null)} />
+                      </Button>
+                    )}
                   </Box>
 
                   {/* Payslips */}
                   <Box component="div" sx={{ mb: 2 }}>
                     <Typography variant="body2" sx={{ mb: 1 }}>Last 3 Months Payslip *</Typography>
-                    <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
-                      {payslipFile ? payslipFile.name : 'Upload Payslip PDF/Image'}
-                      <input type="file" hidden onChange={(e) => setPayslipFile(e.target.files?.[0] || null)} required />
-                    </Button>
+                    {uploadedDocs['payslip'] ? (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', p: 1, border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+                        <Typography variant="body2" sx={{ color: '#10b981', flexGrow: 1, fontWeight: 'bold' }}>✓ Payslip Submitted</Typography>
+                        <Button size="small" variant="outlined" onClick={() => handlePreview('payslip')} startIcon={<Visibility />}>Preview</Button>
+                        <IconButton color="error" onClick={() => handleDeleteDoc('payslip')} size="small"><Delete /></IconButton>
+                      </Box>
+                    ) : (
+                      <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
+                        {payslipFile ? payslipFile.name : 'Upload Payslip PDF/Image'}
+                        <input type="file" hidden onChange={(e) => handleFileSelect('payslip', e.target.files?.[0] || null)} />
+                      </Button>
+                    )}
                   </Box>
 
                   {/* Bank Statement */}
                   <Box component="div" sx={{ mb: 2 }}>
                     <Typography variant="body2" sx={{ mb: 1 }}>Last 6 Months Bank Statement *</Typography>
-                    <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
-                      {bankFile ? bankFile.name : 'Upload Bank Statement PDF/Image'}
-                      <input type="file" hidden onChange={(e) => setBankFile(e.target.files?.[0] || null)} required />
-                    </Button>
+                    {uploadedDocs['bank_statement'] ? (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', p: 1, border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+                        <Typography variant="body2" sx={{ color: '#10b981', flexGrow: 1, fontWeight: 'bold' }}>✓ Bank Statement Submitted</Typography>
+                        <Button size="small" variant="outlined" onClick={() => handlePreview('bank_statement')} startIcon={<Visibility />}>Preview</Button>
+                        <IconButton color="error" onClick={() => handleDeleteDoc('bank_statement')} size="small"><Delete /></IconButton>
+                      </Box>
+                    ) : (
+                      <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
+                        {bankFile ? bankFile.name : 'Upload Bank Statement PDF/Image'}
+                        <input type="file" hidden onChange={(e) => handleFileSelect('bank_statement', e.target.files?.[0] || null)} />
+                      </Button>
+                    )}
                   </Box>
 
                   {/* Address Proof */}
                   <Box component="div" sx={{ mb: 3 }}>
                     <Typography variant="body2" sx={{ mb: 1 }}>Address Proof *</Typography>
-                    <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
-                      {addressFile ? addressFile.name : 'Upload Bill/Utility Proof'}
-                      <input type="file" hidden onChange={(e) => setAddressFile(e.target.files?.[0] || null)} required />
-                    </Button>
+                    {uploadedDocs['address_proof'] ? (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', p: 1, border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+                        <Typography variant="body2" sx={{ color: '#10b981', flexGrow: 1, fontWeight: 'bold' }}>✓ Address Proof Submitted</Typography>
+                        <Button size="small" variant="outlined" onClick={() => handlePreview('address_proof')} startIcon={<Visibility />}>Preview</Button>
+                        <IconButton color="error" onClick={() => handleDeleteDoc('address_proof')} size="small"><Delete /></IconButton>
+                      </Box>
+                    ) : (
+                      <Button component="label" variant="outlined" startIcon={<CloudUpload />} fullWidth>
+                        {addressFile ? addressFile.name : 'Upload Bill/Utility Proof'}
+                        <input type="file" hidden onChange={(e) => handleFileSelect('address_proof', e.target.files?.[0] || null)} />
+                      </Button>
+                    )}
                   </Box>
 
                   <Button
@@ -497,7 +713,11 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
                     disabled={loading}
                     sx={{ bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' }, textTransform: 'none', py: 1.5, fontWeight: 'bold' }}
                   >
-                    {loading ? 'Submitting Application & Files...' : 'Submit Application & Trigger AI Verification'}
+                    {loading 
+                      ? 'Processing...' 
+                      : activeLoanId 
+                        ? 'Trigger AI Verification on Existing Loan' 
+                        : 'Submit Application & Trigger AI Verification'}
                   </Button>
                 </CardContent>
               </Card>
@@ -626,6 +846,53 @@ export default function CustomerPortal({ token, backendUrl, activeLoanId, setAct
           </CardContent>
         </Card>
       )}
+      {/* Document Preview Dialog overlay */}
+      <Dialog 
+        open={!!previewUrl} 
+        onClose={() => {
+          if (previewUrl && previewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(previewUrl);
+          }
+          setPreviewUrl(null);
+          setPreviewType(null);
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <div style={{ background: '#1f2937', color: '#f3f4f6', padding: '16px' }}>
+          <DialogTitle sx={{ fontWeight: 'bold', px: 1, py: 1 }}>
+            {previewType ? `${previewType.toUpperCase()} Preview` : 'Document Preview'}
+          </DialogTitle>
+          <DialogContent sx={{ p: 1, my: 1 }}>
+            {previewType === 'liveness_video' ? (
+              <video 
+                src={previewUrl || ''} 
+                controls 
+                style={{ width: '100%', maxHeight: '65vh', borderRadius: '4px', background: '#000' }} 
+              />
+            ) : (
+              <iframe 
+                src={previewUrl || ''} 
+                style={{ width: '100%', height: '65vh', border: 'none', background: '#fff', borderRadius: '4px' }} 
+              />
+            )}
+          </DialogContent>
+          <DialogActions sx={{ p: 1 }}>
+            <Button 
+              onClick={() => {
+                if (previewUrl && previewUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(previewUrl);
+                }
+                setPreviewUrl(null);
+                setPreviewType(null);
+              }} 
+              sx={{ color: '#9ca3af' }}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </div>
+      </Dialog>
     </Box>
   );
 }

@@ -57,7 +57,11 @@ export async function runLoanProcessingPipeline(loanId: string): Promise<void> {
     const docsRes = await client.query("SELECT * FROM loan_documents WHERE loan_id = $1", [loanId]);
     const documents = docsRes.rows;
 
-    const applicantName = loan.applicant_data?.name || 'Jane Doe';
+    let applicantName = loan.applicant_data?.name || '';
+    if (!applicantName) {
+      const userRes = await client.query("SELECT name FROM users WHERE id = $1", [loan.user_id]);
+      applicantName = userRes.rowCount && userRes.rowCount > 0 ? userRes.rows[0].name : 'Jane Doe';
+    }
     const ocrResults: Record<string, ExtractedData> = {};
     const docFraudReports: DocumentFraudReport[] = [];
     let metadataTamperingAlert = false;
@@ -150,10 +154,33 @@ export async function runLoanProcessingPipeline(loanId: string): Promise<void> {
     sendSseUpdate(loanId, { stage: 'document_classification', status: 'success', message: 'Documents classified.' });
     sendSseUpdate(loanId, { stage: 'ocr_extraction', status: 'success', message: 'OCR layouts extracted.' });
 
-    // Extract basic profile parameters for engines
-    const applicantDob = loan.applicant_data?.dob || '1995-08-15';
-    const declaredIncome = parseFloat(loan.applicant_data?.declaredIncome) || 80000;
-    const declaredEmployer = loan.applicant_data?.employer || 'Fintech Innovators';
+    // Backfill any missing applicant_data using OCR results
+    let applicantDob = loan.applicant_data?.dob || '';
+    if (!applicantDob) {
+      applicantDob = ocrResults['aadhaar']?.extractedFields.dob || ocrResults['pan']?.extractedFields.dob || '15-08-1995';
+    }
+
+    let declaredIncome = parseFloat(loan.applicant_data?.declaredIncome) || 0;
+    if (!declaredIncome) {
+      declaredIncome = parseFloat(ocrResults['payslip']?.extractedFields.netPay) || 
+                       parseFloat(ocrResults['bank_statement']?.extractedFields.averageBalance) / 1.5 || 
+                       85000;
+    }
+
+    let declaredEmployer = loan.applicant_data?.employer || '';
+    if (!declaredEmployer) {
+      declaredEmployer = ocrResults['payslip']?.extractedFields.employerName || 'Fintech Innovators Pvt Ltd';
+    }
+
+    // Save backfilled details to DB so that they are loaded in subsequent profile checks
+    const updatedApplicantData = {
+      ...loan.applicant_data,
+      name: applicantName,
+      dob: applicantDob,
+      declaredIncome,
+      employer: declaredEmployer
+    };
+    await client.query("UPDATE loans SET applicant_data = $1 WHERE id = $2", [JSON.stringify(updatedApplicantData), loanId]);
 
     // 2. Stage 3: Identity Verification
     sendSseUpdate(loanId, { stage: 'identity_verification', status: 'pending', message: 'Checking Identity Consistency (MIDV-500/2020)...' });

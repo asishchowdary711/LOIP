@@ -106,5 +106,38 @@ export async function getProfile(req: AuthenticatedRequest, res: Response) {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  res.json({ user: req.user });
+  try {
+    const latestLoan = await pool.query(
+      'SELECT id, status, applicant_data FROM loans WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [req.user.id]
+    );
+    
+    let latestApplicantData = null;
+    let latestDocuments: any[] = [];
+    let latestLoanId = null;
+    let latestLoanStatus = null;
+
+    if (latestLoan.rowCount && latestLoan.rowCount > 0) {
+      latestLoanId = latestLoan.rows[0].id;
+      latestLoanStatus = latestLoan.rows[0].status;
+      latestApplicantData = latestLoan.rows[0].applicant_data;
+      
+      const docsRes = await pool.query(
+        'SELECT id, document_type, classification_confidence FROM loan_documents WHERE loan_id = $1',
+        [latestLoanId]
+      );
+      latestDocuments = docsRes.rows;
+    }
+
+    res.json({
+      user: req.user,
+      latestLoanId,
+      latestLoanStatus,
+      latestApplicantData,
+      latestDocuments
+    });
+  } catch (error) {
+    console.error('Error fetching user profile extra details:', error);
+    res.json({ user: req.user, latestLoanId: null, latestApplicantData: null, latestDocuments: [] });
+  }
 }

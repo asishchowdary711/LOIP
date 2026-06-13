@@ -35,8 +35,8 @@ export async function applyLoan(req: AuthenticatedRequest, res: Response) {
   const userId = req.user.id;
   const { loanAmount, name, dob, declaredIncome, employer, challenges, sandboxCibil, sandboxDebt, sandboxUtil } = req.body;
 
-  if (!loanAmount || !name || !dob || !declaredIncome || !employer) {
-    return res.status(400).json({ error: 'Required applicant fields are missing' });
+  if (!loanAmount) {
+    return res.status(400).json({ error: 'Required loan amount is missing' });
   }
 
   const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
@@ -50,10 +50,10 @@ export async function applyLoan(req: AuthenticatedRequest, res: Response) {
 
     // 1. Create loan application entry
     const applicantData = {
-      name,
-      dob,
-      declaredIncome,
-      employer,
+      name: name || '',
+      dob: dob || '',
+      declaredIncome: declaredIncome ? parseFloat(declaredIncome) : 0,
+      employer: employer || '',
       challenges: challenges ? JSON.parse(challenges) : ['SMILED', 'BLINKED'],
       sandboxCibil: sandboxCibil ? parseInt(sandboxCibil) : undefined,
       sandboxDebt: sandboxDebt ? parseFloat(sandboxDebt) : undefined,
@@ -459,5 +459,164 @@ export async function getRiskDetails(req: AuthenticatedRequest, res: Response) {
   } catch (error) {
     console.error('Error fetching risk details:', error);
     res.status(500).json({ error: 'Database error fetching risk profile' });
+  }
+}
+
+/**
+ * Delete a specific document by its ID (deletes file directly from disk and record from DB)
+ */
+export async function deleteDocument(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { id } = req.params;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Fetch document details and owner
+    const docRes = await client.query(
+      `SELECT d.*, l.user_id FROM loan_documents d
+       JOIN loans l ON d.loan_id = l.id
+       WHERE d.id = $1`,
+      [id]
+    );
+
+    if (docRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const doc = docRes.rows[0];
+
+    // Authorization check
+    if (req.user.role !== 'admin' && req.user.id !== doc.user_id) {
+      return res.status(403).json({ error: 'Unauthorized to delete this document' });
+    }
+
+    // Delete encrypted file from disk directly (without decryption)
+    if (fs.existsSync(doc.file_path)) {
+      fs.unlinkSync(doc.file_path);
+    }
+
+    // Delete record from DB
+    await client.query('DELETE FROM loan_documents WHERE id = $1', [id]);
+
+    // Write audit log
+    await client.query(
+      `INSERT INTO audit_logs (loan_id, actor_id, action, description)
+       VALUES ($1, $2, 'DOCUMENT_DELETED', $3)`,
+      [doc.loan_id, req.user.id, `Deleted document: ${doc.document_type}`]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Document deleted successfully.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting document:', error);
+    res.status(500).json({ error: 'Internal server error deleting document' });
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Upload/Replace a single document in an active loan
+ */
+export async function uploadSingleDocument(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { loanId } = req.params;
+  const { documentType } = req.body;
+
+  if (!documentType) {
+    return res.status(400).json({ error: 'documentType is required' });
+  }
+
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+  if (!files || !files[documentType] || files[documentType].length === 0) {
+    return res.status(400).json({ error: `No file uploaded for key: ${documentType}` });
+  }
+
+  const file = files[documentType][0];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify ownership
+    const loanRes = await client.query('SELECT user_id FROM loans WHERE id = $1', [loanId]);
+    if (loanRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Loan application not found' });
+    }
+
+    if (req.user.role !== 'admin' && req.user.id !== loanRes.rows[0].user_id) {
+      return res.status(403).json({ error: 'Unauthorized to modify this loan application' });
+    }
+
+    // Check if doc already exists
+    const existingDocRes = await client.query(
+      'SELECT id, file_path FROM loan_documents WHERE loan_id = $1 AND document_type = $2',
+      [loanId, documentType]
+    );
+
+    let docId = crypto.randomUUID();
+    const encryptedFileName = `${docId}.enc`;
+    const encryptedPath = path.join(UPLOADS_DIR, encryptedFileName);
+
+    // Encrypt in-memory buffer
+    const encryptedBuffer = encryptBuffer(file.buffer);
+
+    // Delete old file from disk if replacing
+    if (existingDocRes.rowCount && existingDocRes.rowCount > 0) {
+      const oldDoc = existingDocRes.rows[0];
+      docId = oldDoc.id; // Keep the same UUID
+      if (fs.existsSync(oldDoc.file_path)) {
+        try { fs.unlinkSync(oldDoc.file_path); } catch (e) {}
+      }
+      // Write new encrypted file (at same or new path)
+      fs.writeFileSync(encryptedPath, encryptedBuffer);
+      // Update record
+      await client.query(
+        'UPDATE loan_documents SET file_path = $1, classification_confidence = 0.00, ocr_result = NULL WHERE id = $2',
+        [encryptedPath, docId]
+      );
+    } else {
+      // Write new encrypted file
+      fs.writeFileSync(encryptedPath, encryptedBuffer);
+      // Insert new record
+      await client.query(
+        `INSERT INTO loan_documents (id, loan_id, document_type, file_path)
+         VALUES ($1, $2, $3, $4)`,
+        [docId, loanId, documentType, encryptedPath]
+      );
+    }
+
+    // Write audit log
+    await client.query(
+      `INSERT INTO audit_logs (loan_id, actor_id, action, description)
+       VALUES ($1, $2, 'DOCUMENT_UPLOADED', $3)`,
+      [loanId, req.user.id, `Uploaded/Replaced document: ${documentType}`]
+    );
+
+    await client.query('COMMIT');
+
+    // Trigger background processing pipeline
+    await boss.send('process-loan', { loanId });
+    console.log(`[Controller] Re-published process-loan job to pg-boss for loan ${loanId} after single document upload`);
+
+    res.json({
+      message: 'Document uploaded successfully. Re-verification pipeline triggered.',
+      documentId: docId
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error uploading single document:', error);
+    res.status(500).json({ error: 'Internal server error during single document upload' });
+  } finally {
+    client.release();
   }
 }

@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
   AppRegistration, VerifiedUser, ErrorOutlined, RateReview, CancelPresentation,
-  Schedule, Sync, OpenInNew
+  Schedule, Sync, OpenInNew, Visibility
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -55,6 +55,23 @@ export default function AdminPortal({ token, backendUrl }: AdminPortalProps) {
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [decisionAction, setDecisionAction] = useState<'approve' | 'reject' | 'request-docs'>('approve');
   const [comments, setComments] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<string | null>(null);
+
+  const handlePreview = async (docId: string, docType: string) => {
+    try {
+      const res = await axios.get(`${backendUrl}/api/documents/${docId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: (res.headers['content-type'] as string) || 'application/pdf' });
+      const objectUrl = URL.createObjectURL(blob);
+      setPreviewUrl(objectUrl);
+      setPreviewType(docType);
+    } catch (err) {
+      console.error('Error fetching preview blob:', err);
+    }
+  };
 
   // Fetch applications list
   const fetchApplications = async () => {
@@ -421,7 +438,16 @@ export default function AdminPortal({ token, backendUrl }: AdminPortalProps) {
                       ) : (
                         <>
                           <Typography variant="caption" sx={{ color: 'var(--text-muted)', display: 'block', mb: 1 }}>Conf: {doc.classification_confidence}%</Typography>
-                          <Box component="div" sx={{ mt: 1 }}>
+                          <Box component="div" sx={{ mt: 1, display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handlePreview(doc.id, doc.document_type)}
+                              startIcon={<Visibility />}
+                              sx={{ textTransform: 'none', fontSize: 10 }}
+                            >
+                              Preview
+                            </Button>
                             <Button
                               variant="outlined"
                               size="small"
@@ -430,7 +456,7 @@ export default function AdminPortal({ token, backendUrl }: AdminPortalProps) {
                               startIcon={<OpenInNew />}
                               sx={{ textTransform: 'none', fontSize: 10 }}
                             >
-                              Open File
+                              Open
                             </Button>
                           </Box>
                         </>
@@ -613,6 +639,53 @@ export default function AdminPortal({ token, backendUrl }: AdminPortalProps) {
               sx={{ fontWeight: 'bold' }}
             >
               Submit Decision
+            </Button>
+          </DialogActions>
+        </div>
+      </Dialog>
+      {/* Document Preview Dialog overlay */}
+      <Dialog 
+        open={!!previewUrl} 
+        onClose={() => {
+          if (previewUrl && previewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(previewUrl);
+          }
+          setPreviewUrl(null);
+          setPreviewType(null);
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <div style={{ background: '#1f2937', color: '#f3f4f6', padding: '16px' }}>
+          <DialogTitle sx={{ fontWeight: 'bold', px: 1, py: 1 }}>
+            {previewType ? `${previewType.toUpperCase()} Preview` : 'Document Preview'}
+          </DialogTitle>
+          <DialogContent sx={{ p: 1, my: 1 }}>
+            {previewType === 'liveness_video' ? (
+              <video 
+                src={previewUrl || ''} 
+                controls 
+                style={{ width: '100%', maxHeight: '65vh', borderRadius: '4px', background: '#000' }} 
+              />
+            ) : (
+              <iframe 
+                src={previewUrl || ''} 
+                style={{ width: '100%', height: '65vh', border: 'none', background: '#fff', borderRadius: '4px' }} 
+              />
+            )}
+          </DialogContent>
+          <DialogActions sx={{ p: 1 }}>
+            <Button 
+              onClick={() => {
+                if (previewUrl && previewUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(previewUrl);
+                }
+                setPreviewUrl(null);
+                setPreviewType(null);
+              }} 
+              sx={{ color: '#9ca3af' }}
+            >
+              Close
             </Button>
           </DialogActions>
         </div>
