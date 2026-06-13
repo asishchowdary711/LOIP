@@ -8,7 +8,7 @@ class IncomeIntelligenceProcessor:
     def __init__(self, mock_mode: bool = True):
         self.xgboost = XGBoostWrapper(mock_mode=mock_mode)
 
-    def process_income(self, application_id: str, extracted_data: dict, segment: str = "salaried") -> IncomeResult:
+    def process_income(self, application_id: str, extracted_data: dict, segment: str = "salaried", application_employer_name: str | None = None) -> IncomeResult:
         result = IncomeResult(
             application_id=application_id, 
             segment=segment,
@@ -42,7 +42,13 @@ class IncomeIntelligenceProcessor:
                     ))
             except ValueError:
                 result.anomaly_flags.append(IncomeFlag.SALARY_MISSING_MANDATORY_FIELDS)
-                
+
+            slip_employer = slip.get("employer_name")
+            if slip_employer and application_employer_name:
+                if slip_employer.strip().lower() != application_employer_name.strip().lower():
+                    result.anomaly_flags.append(IncomeFlag.EMPLOYER_NAME_MISMATCH)
+
+
         # 2. Parse ITR
         if "itr" in extracted_data:
             itr = extracted_data["itr"]
@@ -90,10 +96,13 @@ class IncomeIntelligenceProcessor:
         # 4. Parse Bank Statement
         if "bank_statement" in extracted_data:
             stmt = extracted_data["bank_statement"]
-            # Mocking salary credit detection or cash flow for self-employed
-            credits = [
-                SalaryCredit(amount=salary_slip_amount or (itr_amount/12) or 50000.0, date="01/01/2026", narration="CREDIT")
-            ]
+            if "salary_credits" in stmt:
+                credits = [SalaryCredit(**c) for c in stmt["salary_credits"]]
+            else:
+                # Mocking salary credit detection or cash flow for self-employed
+                credits = [
+                    SalaryCredit(amount=salary_slip_amount or (itr_amount/12) or 50000.0, date="01/01/2026", narration="CREDIT")
+                ]
             result.salary_credits = credits
             if credits:
                 bank_credit_amount = sum(c.amount for c in credits) / len(credits)
@@ -128,6 +137,8 @@ class IncomeIntelligenceProcessor:
             max_val = max(salary_slip_amount, bank_credit_amount)
             if max_val > 0 and diff / max_val > 0.3:
                 result.anomaly_flags.append(IncomeFlag.SALARY_SLIP_VS_BANK_MISMATCH)
+                if salary_slip_amount > bank_credit_amount:
+                    result.anomaly_flags.append(IncomeFlag.INCOME_INFLATION)
 
         if result.verified_monthly_income > 0 and result.verified_monthly_income < 20000:
             result.anomaly_flags.append(IncomeFlag.INCOME_BELOW_RBI_MINIMUM)

@@ -48,7 +48,8 @@ class OnboardingPipeline(BasePipeline):
         income_result = self.income_processor.process_income(
             application.application_id,
             extracted_data,
-            segment=application.employment_type
+            segment=application.employment_type,
+            application_employer_name=application.employer_name
         )
 
         affordability_result = self.affordability_processor.process_affordability(

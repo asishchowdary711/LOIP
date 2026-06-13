@@ -17,7 +17,7 @@ class IdentityTrustProcessor:
         self.uidai_client = UIDAIClient()
         self.uidai_client._mock = mock_mode
 
-    async def verify_identity(self, application_id: str, extracted_fields: dict, application_data: dict, selfie_img=None, doc_face_img=None) -> IdentityVerificationResult:
+    async def verify_identity(self, application_id: str, extracted_fields: dict, application_data: dict, selfie_img=None, doc_face_img=None, document_metadata: dict | None = None) -> IdentityVerificationResult:
         result = IdentityVerificationResult(application_id=application_id, identity_confidence=1.0)
         
         # 1. API Verification
@@ -94,6 +94,13 @@ class IdentityTrustProcessor:
             if dob_sources[0] != dob_sources[1]:
                 result.tamper_flags.append(IdentityFlag.DOB_MISMATCH)
                 result.mismatches.append("DOB mismatch between documents/application")
+
+        # 4. Document metadata tamper check (e.g. PDF edited in Photoshop)
+        if document_metadata:
+            producer_info = f"{document_metadata.get('producer', '')} {document_metadata.get('creator', '')}".lower()
+            if "photoshop" in producer_info:
+                result.tamper_flags.append(IdentityFlag.DOCUMENT_METADATA_ANOMALY)
+                result.mismatches.append("Document metadata indicates editing software (possible tamper)")
 
         # Confidence heuristic
         score = 1.0

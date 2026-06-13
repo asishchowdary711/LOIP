@@ -3,7 +3,7 @@ from schemas.decision import (
     OnboardingDecision, Decision, ReasonCode, LoanApplication
 )
 from schemas.identity import IdentityVerificationResult, IdentityFlag
-from schemas.income import IncomeResult
+from schemas.income import IncomeResult, IncomeFlag
 from schemas.affordability import AffordabilityResult
 from schemas.bureau import CreditBureauResult
 
@@ -46,6 +46,14 @@ class RiskDecisionProcessor:
             reason_codes.append(ReasonCode(code="kyc_document_invalid", category="identity"))
             return self._reject(application, identity, income, affordability, bureau, reason_codes)
 
+        if identity.has_flag(IdentityFlag.NAME_PAN_AADHAAR_MISMATCH):
+            reason_codes.append(ReasonCode(code="identity_mismatch_name", category="identity"))
+            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+
+        if identity.has_flag(IdentityFlag.DOB_MISMATCH):
+            reason_codes.append(ReasonCode(code="identity_mismatch_dob", category="identity"))
+            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+
         # 2. Hard Credit Rejects
         if bureau.score < 650:
             reason_codes.append(ReasonCode(code="cibil_score_below_minimum", category="credit", detail=f"score={bureau.score}"))
@@ -59,7 +67,12 @@ class RiskDecisionProcessor:
             reason_codes.append(ReasonCode(code="overdue_accounts_in_bureau", category="credit"))
             return self._reject(application, identity, income, affordability, bureau, reason_codes)
 
-        # 3. Hard Affordability Rejects
+        # 3. Hard Income Rejects
+        if income.segment == "salaried" and IncomeFlag.NO_SALARY_CREDIT_FOUND in income.anomaly_flags:
+            reason_codes.append(ReasonCode(code="bank_credit_not_found", category="income"))
+            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+
+        # 4. Hard Affordability Rejects
         if affordability.foir > 0.60:
             reason_codes.append(ReasonCode(code="foir_exceeded", category="affordability", detail=f"foir={affordability.foir:.2f}"))
             return self._reject(application, identity, income, affordability, bureau, reason_codes)
@@ -68,9 +81,11 @@ class RiskDecisionProcessor:
             reason_codes.append(ReasonCode(code="income_below_minimum", category="income"))
             return self._reject(application, identity, income, affordability, bureau, reason_codes)
 
-        # 4. Review Triggers
+        # 5. Review Triggers
         if identity.identity_confidence < 0.70:
             review_flags.append("identity_moderate_confidence")
+        if identity.has_flag(IdentityFlag.DOCUMENT_METADATA_ANOMALY):
+            review_flags.append("document_metadata_anomaly")
         if affordability.foir > 0.50:
             review_flags.append(f"foir_marginal:{affordability.foir:.2f}")
         if income.anomaly_flags:
