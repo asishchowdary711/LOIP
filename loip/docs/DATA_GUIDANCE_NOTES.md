@@ -63,10 +63,32 @@ slips/etc.). Given:
 
 **this download is deferred indefinitely, not attempted.**
 
-## RVL-CDIP — not downloaded
+## RVL-CDIP — partial subset downloaded (320 images), full 38.7GB archive deferred
 
-~38GB, would nearly fill remaining disk on this machine, and likely requires
-HuggingFace authentication (gated dataset). Not attempted.
+The full archive (`aharley/rvl_cdip` on HuggingFace, `data/rvl-cdip.tar.gz`,
+38,762,320,458 bytes) was re-checked: it is **not gated** (contrary to the
+earlier assumption), but at 38.7GB it would consume most of the ~11GB free on
+this machine. Additionally, `datasets>=5.0` can no longer load this repo via
+`load_dataset(..., streaming=True)` — it errors with `RuntimeError: Dataset
+scripts are no longer supported, but found rvl_cdip.py` (the repo uses a
+legacy loading script unsupported by modern `datasets`).
+
+**Decision**: rather than the full corpus, `scripts/download_rvlcdip_subset.py`
+streams the tar.gz directly via `requests` + `tarfile.open(fileobj=..., mode="r|gz")`
+— reading sequentially and extracting only matching files, without ever
+writing the full archive to disk. Labels come from `data/train.txt`
+(13.7MB, downloaded in full). The script stops once each of the 16 classes
+has reached a target count (default 20/class = 320 images) or a safety
+byte/time budget is hit.
+
+The resulting subset (`data/rvl_cdip_subset/`, 320 images / 38.6MB,
+class-balanced 20-per-category, manifest at
+`data/rvl_cdip_subset/manifest.json`) is a **LayoutLMv3 backbone fine-tuning
+smoke sample only** — same role/caveat as the 25-doc annotation sample above:
+it validates the fine-tuning pipeline end-to-end across all 16 RVL-CDIP
+categories, not a substitute for the full 400K-document corpus. Re-run the
+script with a larger `--per-class`/`--max-mb` if a bigger sample is needed
+later; the full 38.7GB archive remains out of scope.
 
 ## DocVQA — not downloaded
 
