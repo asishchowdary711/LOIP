@@ -132,6 +132,7 @@ class RiskDecisionProcessor:
         return OnboardingDecision(
             application_id=app.application_id,
             decision=Decision.REJECT,
+            loan_amount=app.loan_amount,
             reason_codes=reasons,
             risk_score=score,
             identity_result=idn,
@@ -145,6 +146,7 @@ class RiskDecisionProcessor:
         return OnboardingDecision(
             application_id=app.application_id,
             decision=Decision.REVIEW,
+            loan_amount=app.loan_amount,
             review_flags=flags,
             risk_score=score,
             identity_result=idn,
@@ -158,6 +160,7 @@ class RiskDecisionProcessor:
         return OnboardingDecision(
             application_id=app.application_id,
             decision=Decision.APPROVE,
+            loan_amount=app.loan_amount,
             risk_score=score,
             identity_result=idn,
             income_result=inc,

@@ -47,6 +47,7 @@ class ReasonCode(BaseModel):
 class OnboardingDecision(BaseModel):
     application_id: str
     decision: Decision
+    loan_amount: float | None = Field(default=None, description="Requested loan amount (INR), carried from the application")
     reason_codes: list[ReasonCode] = Field(default_factory=list)
     risk_score: float | None = Field(default=None, ge=0.0, le=1.0, description="XGBoost ensemble score")
     review_flags: list[str] = Field(default_factory=list)

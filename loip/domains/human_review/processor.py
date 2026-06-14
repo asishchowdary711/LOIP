@@ -177,6 +177,10 @@ class ReviewProcessor:
         return decision.application_id
 
     def _extract_loan_amount(self, decision: OnboardingDecision) -> float:
+        if decision.loan_amount is not None:
+            return decision.loan_amount
+        # Fallback for decisions created before loan_amount was carried through:
+        # approximate from the proposed EMI (one year of payments).
         if decision.affordability_result:
             return decision.affordability_result.proposed_emi * 12
         return 0.0
