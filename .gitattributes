@@ -1,0 +1,1 @@
+loip/models/checkpoints/**/*.safetensors filter=lfs diff=lfs merge=lfs -text
