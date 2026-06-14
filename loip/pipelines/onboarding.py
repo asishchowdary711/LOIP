@@ -24,7 +24,7 @@ class OnboardingPipeline(BasePipeline):
         self.cibil_client = CIBILClient()
         self.cibil_client._mock = mock_mode
 
-    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict, raw_documents: list[bytes] | None = None, document_store=None, event_publisher=None, identity_graph=None) -> OnboardingDecision:
+    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict, raw_documents: list[bytes] | None = None, document_store=None, event_publisher=None, identity_graph=None, vcip=None) -> OnboardingDecision:
         from loip.events import Topic
 
         app_id = application.application_id
@@ -115,7 +115,8 @@ class OnboardingPipeline(BasePipeline):
             income_result,
             affordability_result,
             bureau_result,
-            fraud_result
+            fraud_result,
+            vcip=vcip,
         )
         decision.fraud_result = fraud_result
 

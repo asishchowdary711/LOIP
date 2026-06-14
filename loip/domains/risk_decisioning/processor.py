@@ -1,32 +1,49 @@
+from loip.domains.identity_trust.vcip import VCIPProcessor
 from loip.models.xgboost_wrapper import XGBoostWrapper
+from schemas.affordability import AffordabilityResult
+from schemas.bureau import CreditBureauResult
 from schemas.decision import (
     OnboardingDecision, Decision, ReasonCode, LoanApplication
 )
 from schemas.identity import IdentityVerificationResult, IdentityFlag
 from schemas.income import IncomeResult, IncomeFlag
-from schemas.affordability import AffordabilityResult
-from schemas.bureau import CreditBureauResult
+from schemas.vcip import VCIPResult, VCIPStatus
 
 class RiskDecisionProcessor:
     def __init__(self, mock_mode: bool = True):
         self.ensemble = XGBoostWrapper(mock_mode=mock_mode)
 
     def decide(
-        self, 
+        self,
         application: LoanApplication,
         identity: IdentityVerificationResult,
         income: IncomeResult,
         affordability: AffordabilityResult,
         bureau: CreditBureauResult,
-        fraud: dict = None
+        fraud: dict = None,
+        vcip: VCIPResult | None = None,
     ) -> OnboardingDecision:
-        
+
         reason_codes = []
         review_flags = []
-        
+
+        # RBI V-CIP gate: video KYC must be completed before disbursal for
+        # loans above the configured ceiling. A failed V-CIP is a hard reject;
+        # an incomplete/absent one blocks disbursal (handled at the approve gate).
+        vcip_required = VCIPProcessor.is_required(application.loan_amount)
+        vcip_completed = vcip is not None and vcip.status == VCIPStatus.COMPLETED
+        disbursal_blocked = vcip_required and not vcip_completed
+        disbursal_block_reason = "vcip_required_not_completed" if disbursal_blocked else None
+
         # 0. Hard Fraud Rejects
         if fraud and fraud.fraud_score > 0.80:
             reason_codes.append(ReasonCode(code="high_fraud_risk", category="risk", detail=f"score={fraud.fraud_score}"))
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
+        # 0b. Hard V-CIP reject — a failed video-KYC session is a regulatory reject
+        if vcip is not None and vcip.status == VCIPStatus.FAILED:
+            detail = ",".join(f.value for f in vcip.flags) or None
+            reason_codes.append(ReasonCode(code="vcip_failed", category="identity", detail=detail))
             return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
 
         # 1. Hard KYC Rejects
@@ -100,7 +117,10 @@ class RiskDecisionProcessor:
             review_flags.append(f"employment_tier_high_risk:{application.employment_tier}")
 
         if review_flags:
-            return self._review(application, identity, income, affordability, bureau, review_flags, fraud=fraud)
+            if disbursal_blocked:
+                review_flags.append("vcip_pending")
+            return self._review(application, identity, income, affordability, bureau, review_flags, fraud=fraud,
+                                disbursal_blocked=disbursal_blocked, disbursal_block_reason=disbursal_block_reason)
 
         # 5. Soft ML Scoring
         score = self.ensemble.predict({
@@ -114,10 +134,19 @@ class RiskDecisionProcessor:
         }, task="risk_score")
 
         if score >= 0.70:
+            # Risk-approvable, but a required-yet-incomplete V-CIP holds disbursal:
+            # downgrade to REVIEW pending video KYC rather than auto-approve.
+            if disbursal_blocked:
+                review_flags.append("vcip_pending")
+                return self._review(application, identity, income, affordability, bureau, review_flags, score, fraud=fraud,
+                                    disbursal_blocked=True, disbursal_block_reason=disbursal_block_reason)
             return self._approve(application, identity, income, affordability, bureau, score, fraud=fraud)
         elif score >= 0.40:
             review_flags.append("borderline_score")
-            return self._review(application, identity, income, affordability, bureau, review_flags, score, fraud=fraud)
+            if disbursal_blocked:
+                review_flags.append("vcip_pending")
+            return self._review(application, identity, income, affordability, bureau, review_flags, score, fraud=fraud,
+                                disbursal_blocked=disbursal_blocked, disbursal_block_reason=disbursal_block_reason)
         else:
             reason_codes.append(ReasonCode(code="low_ensemble_score", category="risk"))
             return self._reject(application, identity, income, affordability, bureau, reason_codes, score, fraud=fraud)
@@ -142,13 +171,16 @@ class RiskDecisionProcessor:
             evidence_chains=self._evidence_chains(idn, inc, aff, fraud)
         )
 
-    def _review(self, app, idn, inc, aff, bur, flags, score=None, fraud=None):
+    def _review(self, app, idn, inc, aff, bur, flags, score=None, fraud=None,
+                disbursal_blocked=False, disbursal_block_reason=None):
         return OnboardingDecision(
             application_id=app.application_id,
             decision=Decision.REVIEW,
             loan_amount=app.loan_amount,
             review_flags=flags,
             risk_score=score,
+            disbursal_blocked=disbursal_blocked,
+            disbursal_block_reason=disbursal_block_reason,
             identity_result=idn,
             income_result=inc,
             affordability_result=aff,

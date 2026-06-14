@@ -26,6 +26,7 @@ BUCKET_BY_DOC_TYPE: dict[str, str] = {
     "itr": "itr",
     "gst_return": "gst-returns",
     "offer_letter": "offer-letters",
+    "vcip_recording": "vcip-recordings",
 }
 
 EVIDENCE_BUCKET = "evidence"

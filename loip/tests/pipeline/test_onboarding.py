@@ -1,7 +1,20 @@
 import pytest
 import numpy as np
 from schemas.decision import LoanApplication, Decision
+from schemas.vcip import VCIPResult, VCIPStatus
 from loip.pipelines.onboarding import OnboardingPipeline
+
+
+def _completed_vcip(application_id: str) -> VCIPResult:
+    # ₹5L is above the V-CIP ceiling, so disbursal requires a completed
+    # video-KYC session (RBI Jan 2020 circular).
+    return VCIPResult(
+        session_id="vcip-test",
+        application_id=application_id,
+        status=VCIPStatus.COMPLETED,
+        passed=True,
+    )
+
 
 @pytest.mark.asyncio
 async def test_clean_salaried_application_approves():
@@ -28,10 +41,11 @@ async def test_clean_salaried_application_approves():
         "date_of_birth": "01/01/1990"
     }
     
-    decision = await pipeline.execute(app, images, app_data)
-    
+    decision = await pipeline.execute(app, images, app_data, vcip=_completed_vcip("TEST-123"))
+
     assert decision.decision == Decision.APPROVE
     assert decision.application_id == "TEST-123"
+    assert decision.disbursal_blocked is False
 
 @pytest.mark.asyncio
 async def test_foir_above_60_rejects():
