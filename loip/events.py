@@ -57,7 +57,11 @@ class EventPublisher:
             await self._producer.start()
             self._ready = True
             logger.info("Kafka event publisher connected to %s", self.bootstrap_servers)
-        except Exception as exc:  # noqa: BLE001
+        except ImportError as exc:
+            self._ready = False
+            self._producer = None
+            logger.warning("Kafka unavailable (%s); domain events will not be published", exc)
+        except (RuntimeError, OSError) as exc:
             self._ready = False
             self._producer = None
             logger.warning("Kafka unavailable (%s); domain events will not be published", exc)
@@ -67,8 +71,8 @@ class EventPublisher:
         if self._producer is not None:
             try:
                 await self._producer.stop()
-            except Exception:  # noqa: BLE001
-                pass
+            except (RuntimeError, OSError) as exc:
+                logger.debug("Error stopping Kafka producer: %s", exc)
             self._producer = None
             self._ready = False
 
@@ -83,6 +87,6 @@ class EventPublisher:
         try:
             await self._producer.send_and_wait(topic, value=_serialize(payload), key=key.encode("utf-8"))
             return True
-        except Exception as exc:  # noqa: BLE001
+        except (RuntimeError, OSError) as exc:
             logger.warning("Failed to publish to %s: %s", topic, exc)
             return False
