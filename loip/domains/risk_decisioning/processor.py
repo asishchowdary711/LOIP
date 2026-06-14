@@ -27,59 +27,59 @@ class RiskDecisionProcessor:
         # 0. Hard Fraud Rejects
         if fraud and fraud.fraud_score > 0.80:
             reason_codes.append(ReasonCode(code="high_fraud_risk", category="risk", detail=f"score={fraud.fraud_score}"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
-        
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
         # 1. Hard KYC Rejects
         if identity.identity_confidence < 0.30:
             reason_codes.append(ReasonCode(code="identity_low_confidence", category="identity"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
-            
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
         if identity.has_flag(IdentityFlag.PAN_NSDL_INACTIVE):
             reason_codes.append(ReasonCode(code="pan_inactive_or_invalid", category="identity"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
-            
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
         if identity.has_flag(IdentityFlag.AADHAAR_OTP_FAILED):
             reason_codes.append(ReasonCode(code="aadhaar_verification_failed", category="identity"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
-            
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
         if identity.has_flag(IdentityFlag.PAN_FORMAT_INVALID) or identity.has_flag(IdentityFlag.AADHAAR_FORMAT_INVALID):
             reason_codes.append(ReasonCode(code="kyc_document_invalid", category="identity"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
 
         if identity.has_flag(IdentityFlag.NAME_PAN_AADHAAR_MISMATCH):
             reason_codes.append(ReasonCode(code="identity_mismatch_name", category="identity"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
 
         if identity.has_flag(IdentityFlag.DOB_MISMATCH):
             reason_codes.append(ReasonCode(code="identity_mismatch_dob", category="identity"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
 
         # 2. Hard Credit Rejects
         if bureau.score < 650:
             reason_codes.append(ReasonCode(code="cibil_score_below_minimum", category="credit", detail=f"score={bureau.score}"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
-            
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
         if bureau.dpd_90_plus:
             reason_codes.append(ReasonCode(code="dpd_90_plus_in_24_months", category="credit"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
-            
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
         if bureau.overdue_accounts > 0:
             reason_codes.append(ReasonCode(code="overdue_accounts_in_bureau", category="credit"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
 
         # 3. Hard Income Rejects
         if income.segment == "salaried" and IncomeFlag.NO_SALARY_CREDIT_FOUND in income.anomaly_flags:
             reason_codes.append(ReasonCode(code="bank_credit_not_found", category="income"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
 
         # 4. Hard Affordability Rejects
         if affordability.foir > 0.60:
             reason_codes.append(ReasonCode(code="foir_exceeded", category="affordability", detail=f"foir={affordability.foir:.2f}"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
-            
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
+
         if income.verified_monthly_income < application.min_income_requirement:
             reason_codes.append(ReasonCode(code="income_below_minimum", category="income"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes)
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, fraud=fraud)
 
         # 5. Review Triggers
         if identity.identity_confidence < 0.70:
@@ -100,7 +100,7 @@ class RiskDecisionProcessor:
             review_flags.append(f"employment_tier_high_risk:{application.employment_tier}")
 
         if review_flags:
-            return self._review(application, identity, income, affordability, bureau, review_flags)
+            return self._review(application, identity, income, affordability, bureau, review_flags, fraud=fraud)
 
         # 5. Soft ML Scoring
         score = self.ensemble.predict({
@@ -112,17 +112,23 @@ class RiskDecisionProcessor:
             "employment_tier": application.employment_tier,
             "loan_to_income_ratio": application.loan_amount / max(1, (income.verified_monthly_income * 12))
         }, task="risk_score")
-        
+
         if score >= 0.70:
-            return self._approve(application, identity, income, affordability, bureau, score)
+            return self._approve(application, identity, income, affordability, bureau, score, fraud=fraud)
         elif score >= 0.40:
             review_flags.append("borderline_score")
-            return self._review(application, identity, income, affordability, bureau, review_flags, score)
+            return self._review(application, identity, income, affordability, bureau, review_flags, score, fraud=fraud)
         else:
             reason_codes.append(ReasonCode(code="low_ensemble_score", category="risk"))
-            return self._reject(application, identity, income, affordability, bureau, reason_codes, score)
+            return self._reject(application, identity, income, affordability, bureau, reason_codes, score, fraud=fraud)
 
-    def _reject(self, app, idn, inc, aff, bur, reasons, score=None):
+    def _evidence_chains(self, idn, inc, aff, fraud=None):
+        chains = list(idn.evidence_chains) + list(inc.evidence_chains) + list(aff.evidence_chains)
+        if fraud is not None:
+            chains += list(fraud.evidence_chains)
+        return chains
+
+    def _reject(self, app, idn, inc, aff, bur, reasons, score=None, fraud=None):
         return OnboardingDecision(
             application_id=app.application_id,
             decision=Decision.REJECT,
@@ -131,10 +137,11 @@ class RiskDecisionProcessor:
             identity_result=idn,
             income_result=inc,
             affordability_result=aff,
-            bureau_result=bur
+            bureau_result=bur,
+            evidence_chains=self._evidence_chains(idn, inc, aff, fraud)
         )
 
-    def _review(self, app, idn, inc, aff, bur, flags, score=None):
+    def _review(self, app, idn, inc, aff, bur, flags, score=None, fraud=None):
         return OnboardingDecision(
             application_id=app.application_id,
             decision=Decision.REVIEW,
@@ -143,10 +150,11 @@ class RiskDecisionProcessor:
             identity_result=idn,
             income_result=inc,
             affordability_result=aff,
-            bureau_result=bur
+            bureau_result=bur,
+            evidence_chains=self._evidence_chains(idn, inc, aff, fraud)
         )
 
-    def _approve(self, app, idn, inc, aff, bur, score):
+    def _approve(self, app, idn, inc, aff, bur, score, fraud=None):
         return OnboardingDecision(
             application_id=app.application_id,
             decision=Decision.APPROVE,
@@ -154,5 +162,6 @@ class RiskDecisionProcessor:
             identity_result=idn,
             income_result=inc,
             affordability_result=aff,
-            bureau_result=bur
+            bureau_result=bur,
+            evidence_chains=self._evidence_chains(idn, inc, aff, fraud)
         )

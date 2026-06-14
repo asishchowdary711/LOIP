@@ -51,5 +51,7 @@ class FraudIntelligenceProcessor:
         # Final fraud score computation (simple max of severities)
         if result.signals:
             result.fraud_score = max(s.severity for s in result.signals)
-            
+
+        result.evidence_chains = [s.evidence for s in result.signals]
+
         return result

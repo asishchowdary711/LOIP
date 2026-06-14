@@ -150,4 +150,6 @@ class IncomeIntelligenceProcessor:
             "anomalies": len(result.anomaly_flags)
         }, task="income_confidence")
 
+        result.evidence_chains = [source.evidence for source in result.income_sources]
+
         return result

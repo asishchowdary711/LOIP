@@ -110,5 +110,7 @@ class IdentityTrustProcessor:
         if result.tamper_flags: score -= 0.2 * len(result.tamper_flags)
         
         result.identity_confidence = max(0.0, min(1.0, score))
-        
+
+        result.evidence_chains = [r.evidence for r in result.api_results if r.evidence is not None]
+
         return result

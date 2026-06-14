@@ -44,13 +44,6 @@ def test_source_chains_trace_to_minio_documents():
     pass
 
 
-@pytest.mark.xfail(
-    reason="Genuine implementation gap: OnboardingDecision.evidence_chains and several "
-    "sub-result evidence_chains lists are never populated by the current processors "
-    "(mock_mode returns empty lists). Needs evidence-chain aggregation work in the "
-    "risk decisioning / pipeline layer.",
-    strict=True,
-)
 @pytest.mark.asyncio
 async def test_every_output_field_has_evidence_chain():
     import numpy as np

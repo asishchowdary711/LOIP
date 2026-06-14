@@ -1,5 +1,6 @@
 from loip.models.lightgbm_wrapper import LightGBMWrapper
 from schemas.affordability import AffordabilityResult, AffordabilityFlag
+from schemas.evidence import EvidenceChain, ReconciliationMethod
 
 class AffordabilityProcessor:
     def __init__(self, mock_mode: bool = True):
@@ -43,6 +44,7 @@ class AffordabilityProcessor:
             application_id=application_id,
             verified_monthly_income=verified_monthly_income,
             income_confidence=income_confidence,
+            income_evidence=income_result.get("evidence_chains", []),
             existing_obligations=existing_obligations,
             proposed_emi=proposed_emi,
             total_obligations=total_obligations,
@@ -69,5 +71,13 @@ class AffordabilityProcessor:
             "disposable_income": result.disposable_income,
             "liquidity_score": result.liquidity_score
         })
-        
+
+        result.evidence_chains.append(EvidenceChain(
+            claim=f"foir={result.foir:.4f}",
+            supporting=[],
+            reconciled_value=result.foir,
+            reconciliation_method=ReconciliationMethod.COMPUTED,
+            confidence=result.affordability_confidence,
+        ))
+
         return result

@@ -40,6 +40,7 @@ class ReconciliationMethod(StrEnum):
     MAJORITY_VOTE = "majority_vote"
     HIGHEST_CONFIDENCE = "highest_confidence"
     API_AUTHORITATIVE = "api_authoritative"
+    COMPUTED = "computed"
 
 
 class BoundingBox(BaseModel):
