@@ -11,11 +11,6 @@ import hashlib
 import logging
 from datetime import datetime
 
-
-def _utcnow_naive() -> datetime:
-    """Naive UTC timestamp — the DB columns are ``timestamp without time zone``."""
-    return datetime.utcnow()
-
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -33,6 +28,11 @@ from loip.schemas.db_models import (
 from loip.schemas.decision import OnboardingDecision
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow_naive() -> datetime:
+    """Naive UTC timestamp — the DB columns are ``timestamp without time zone``."""
+    return datetime.utcnow()
 
 _engine = None
 _sessionmaker = None

@@ -35,6 +35,13 @@ class IdentityTrustProcessor:
                 else:
                     result.tamper_flags.append(IdentityFlag.PAN_NSDL_INACTIVE)
                     
+        # Aadhaar Verhoeff checksum (build-plan rule: aadhaar_format_invalid).
+        if "aadhaar_number" in extracted_fields:
+            from loip.validation import is_valid_aadhaar
+            if not is_valid_aadhaar(extracted_fields["aadhaar_number"]):
+                result.tamper_flags.append(IdentityFlag.AADHAAR_FORMAT_INVALID)
+                result.mismatches.append("Aadhaar number fails Verhoeff checksum / format")
+
         if "aadhaar_number" in extracted_fields and "aadhaar_otp" in application_data:
             uidai_res = await self.uidai_client.verify_otp(
                 aadhaar_number=extracted_fields["aadhaar_number"],

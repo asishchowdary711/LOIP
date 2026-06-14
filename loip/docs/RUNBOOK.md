@@ -105,6 +105,36 @@ docker exec loip-kafka-1 kafka-console-consumer \
   --bootstrap-server localhost:29092 --topic risk.decided --from-beginning
 ```
 
+## Identity graph & graph fraud (Neo4j)
+
+The fraud domain (`loip/graph.py`, `IdentityGraph`) ingests each application
+into a Neo4j identity graph and runs Cypher fraud-ring queries:
+
+| Signal | Cypher rule |
+|---|---|
+| `pan_farming` | one Phone/Email shared across **different** PANs |
+| `synthetic_identity_ring` | one Device shared across multiple Persons |
+| `address_inconsistency_ring` | one Address shared across ≥3 applications |
+
+The graph is started in the app lifespan and shared by `/onboard` and the
+seeder; it's best-effort (fraud scoring degrades to the GraphSAGE signal if
+Neo4j is down). `GET /health/ready` reports `neo4j`. Inspect the graph at
+http://localhost:7474 (`neo4j` / `changeme`), e.g.:
+
+```cypher
+MATCH (p:Person)-[r]->(n) RETURN p, r, n LIMIT 50;
+```
+
+## Document-number checksums
+
+`loip/validation.py` implements real, model-free checks that run regardless of
+mock vs real extraction:
+
+- **Aadhaar Verhoeff** (`is_valid_aadhaar`) — wired into identity trust;
+  a failure raises `aadhaar_format_invalid` → `kyc_document_invalid` reject.
+- **Passport MRZ** (`validate_mrz_td3`, ICAO 9303) — wired into the fraud
+  document-forgery rules; a failure raises a `document_forgery` signal.
+
 ## MLOps: drift alerts and retraining
 
 `MLOpsProcessor` (in-memory in mock mode) tracks model registrations, drift

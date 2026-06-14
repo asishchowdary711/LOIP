@@ -26,8 +26,10 @@ except Exception as exc:  # noqa: BLE001 - degrade gracefully if MinIO is down
     document_store = None
     logger.warning("MinIO document store unavailable (%s); documents will not be persisted", exc)
 
-# Set by the app lifespan (loip/web/api.py) once the Kafka producer is started.
+# Set by the app lifespan (loip/web/api.py) once the Kafka producer + Neo4j
+# identity graph are started.
 event_publisher = None
+identity_graph = None
 
 
 @router.post("", response_model=OnboardingDecision)
@@ -62,6 +64,7 @@ async def onboard_application(
             raw_documents=raw_documents,
             document_store=document_store,
             event_publisher=event_publisher,
+            identity_graph=identity_graph,
         )
         return decision
     except Exception as e:

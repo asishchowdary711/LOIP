@@ -75,7 +75,9 @@ URL from the **Ports** tab.
   (console at http://localhost:9001). Each domain step also publishes a Kafka
   event; tail one with
   `docker exec loip-kafka-1 kafka-console-consumer --bootstrap-server localhost:29092 --topic risk.decided --from-beginning`.
-  `GET /health/ready` shows Postgres + MinIO + Kafka connected.
+  Each application is also written to the Neo4j identity graph (browser at
+  http://localhost:7474) where graph-fraud queries (pan_farming, rings) run.
+  `GET /health/ready` shows Postgres + MinIO + Kafka + Neo4j connected.
 
 ## 6. Show the API (2 min)
 
@@ -104,10 +106,11 @@ Docker the integration tests skip instead, so the suite still passes.
 
 - Real OCR/VLM inference (LayoutLMv3 / Donut / Qwen2.5-VL) — wrappers exist,
   weights deferred (`docs/RUNBOOK.md` → "Phase B activation").
-- Heavier compose services (Neo4j, Kafka, OpenSearch, MLflow, Grafana,
-  Ollama) — defined in `docker-compose.yml` but not yet in the request path
-  (Postgres + MinIO are wired and persistent).
-- Face verification / liveness / V-KYC — Phase 2 stubs.
+- Remaining compose services (OpenSearch, MLflow, Grafana, Ollama) — defined
+  but not yet in the request path (Postgres, MinIO, Kafka, and Neo4j are
+  wired and live).
+- Face verification / liveness / V-KYC — Phase 2 stubs (intentionally
+  deferred).
 
 > If a real LLM key is ever needed (e.g. running the Qwen3 copilot with
 > `mock_mode=False`), source it from OpenRouter or Bytez and set it in

@@ -54,7 +54,7 @@ async def test_pan_nsdl_inactive_rejects(monkeypatch):
         "DOD-TEST",
         {
             "pan_number": "ABCDE1234F", "full_name": "Rajesh Kumar", "date_of_birth": "01/01/1990",
-            "aadhaar_number": "123456789012",
+            "aadhaar_number": "234123412346",
         },
         {"aadhaar_otp": "123456", "full_name": "Rajesh Kumar", "date_of_birth": "01/01/1990"},
     )
@@ -84,7 +84,7 @@ async def test_aadhaar_otp_failure_rejects(monkeypatch):
         "DOD-TEST",
         {
             "pan_number": "ABCDE1234F", "full_name": "Rajesh Kumar", "date_of_birth": "01/01/1990",
-            "aadhaar_number": "123456789012",
+            "aadhaar_number": "234123412346",
         },
         {"aadhaar_otp": "000000", "full_name": "Rajesh Kumar", "date_of_birth": "01/01/1990"},
     )

@@ -112,13 +112,16 @@ The **core services wired into the running app** today are PostgreSQL, MinIO
 
 ```bash
 cd loip
-docker compose up -d postgres minio minio-init redis zookeeper kafka kafka-init
+docker compose up -d postgres minio minio-init redis zookeeper kafka kafka-init neo4j
 docker compose ps          # postgres/minio/redis should be "healthy"
 ```
 
 `kafka-init` creates one topic per domain event (`document.classified`,
 `identity.verified`, `income.reconciled`, `affordability.computed`,
 `fraud.scored`, `risk.decided`, `review.assigned`, `consent.captured`).
+
+`neo4j` backs the identity graph and graph-fraud detection (browser at
+http://localhost:7474, bolt at :7687, `neo4j` / `changeme`).
 
 `minio-init` creates one bucket per document type plus `evidence`, `models`,
 and `annotations`. The MinIO console is at http://localhost:9001
@@ -131,10 +134,16 @@ stored object. When Kafka is up, each domain step also publishes an event to
 its topic. If a service is **not** running, the relevant path degrades
 gracefully — the pipeline still runs.
 
-The heavier services (OpenSearch, Neo4j, MLflow, Prometheus, Grafana, Ollama)
-are defined and start with `docker compose up -d`, but are not yet wired into
-the request path. `.env.example` documents all variables; copy it to `.env`
-to override the compose defaults.
+When Neo4j is up, the fraud domain ingests each application into the identity
+graph (Person/PAN/Aadhaar/Phone/Email/Device/Employer/BankAccount/Address) and
+runs Cypher fraud-ring queries (pan_farming, synthetic-identity, address
+rings). If it's down, fraud scoring falls back to the in-graph GraphSAGE
+signal only.
+
+The remaining services (OpenSearch, MLflow, Prometheus, Grafana, Ollama) are
+defined and start with `docker compose up -d`, but are not yet wired into the
+request path. `.env.example` documents all variables; copy it to `.env` to
+override the compose defaults.
 
 ## Environment variables
 

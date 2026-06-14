@@ -4,7 +4,7 @@ EXTRACTED_FIELDS = {
     "pan_number": "ABCDE1234F",
     "full_name": "Rajesh Kumar",
     "date_of_birth": "01/01/1990",
-    "aadhaar_number": "123456789012",
+    "aadhaar_number": "234123412346",
 }
 
 APPLICATION_DATA_NAME_MISMATCH = {

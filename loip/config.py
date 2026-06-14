@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # --- MinIO / object storage ---
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"
-    minio_secret_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"  # noqa: S105 - dev default, override via env
     minio_use_ssl: bool = False
 
     # --- PostgreSQL ---
@@ -26,6 +26,11 @@ class Settings(BaseSettings):
 
     # --- Kafka (async domain event pipeline) ---
     kafka_bootstrap_servers: str = "localhost:9092"
+
+    # --- Neo4j (identity graph / graph fraud) ---
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "changeme"  # noqa: S105 - dev default, override via env
 
     # --- Data residency (RBI localization) ---
     data_region: str = "ap-south-1"

@@ -90,7 +90,7 @@ def _document_store_and_bytes(images):
         return None, None
 
 
-async def seed_demo_cases(event_publisher=None) -> int:
+async def seed_demo_cases(event_publisher=None, identity_graph=None) -> int:
     """Seed demo review cases if the queue is empty. Returns count seeded."""
     if review_processor.get_queue():
         logger.info("Review queue already populated; skipping demo seeding")
@@ -121,6 +121,7 @@ async def seed_demo_cases(event_publisher=None) -> int:
             raw_documents=raw_documents,
             document_store=document_store,
             event_publisher=event_publisher,
+            identity_graph=identity_graph,
         )
         # pipeline.execute stores explainability and creates a case on its OWN
         # ReviewProcessor instance; register it on the web's shared processor too.
@@ -165,7 +166,7 @@ async def _rehydrate_from_db() -> int:
     return len(rows)
 
 
-async def bootstrap_review_console(event_publisher=None) -> int:
+async def bootstrap_review_console(event_publisher=None, identity_graph=None) -> int:
     """Rehydrate the review queue from Postgres; if empty, seed demo cases.
 
     Falls back to in-memory-only demo seeding if Postgres is unreachable, so
@@ -180,4 +181,4 @@ async def bootstrap_review_console(event_publisher=None) -> int:
     except Exception as exc:  # noqa: BLE001
         logger.warning("Postgres unavailable (%s); seeding in-memory demo data only", exc)
 
-    return await seed_demo_cases(event_publisher=event_publisher)
+    return await seed_demo_cases(event_publisher=event_publisher, identity_graph=identity_graph)

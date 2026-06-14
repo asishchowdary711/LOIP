@@ -61,7 +61,8 @@ class Qwen25VLWrapper:
                 ]
             elif doc_class == DocumentClass.AADHAAR:
                 fields = [
-                    ExtractionField(name="aadhaar_number", value="123456789012", confidence=0.99),
+                    # Verhoeff-valid 12-digit Aadhaar (passes loip.validation.is_valid_aadhaar)
+                    ExtractionField(name="aadhaar_number", value="234123412346", confidence=0.99),
                 ]
             elif doc_class == DocumentClass.ITR:
                 fields = [

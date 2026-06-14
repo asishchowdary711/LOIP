@@ -1,11 +1,14 @@
 from loip.models.xgboost_wrapper import XGBoostWrapper
-from schemas.income import (
-    IncomeResult, IncomeSource, SalaryCredit, IncomeFlag
-)
 from schemas.evidence import (
-    EvidenceChain, ExtractedField, ReconciliationMethod, SourceLocation,
-    DocumentType, ExtractionMethod,
+    DocumentType,
+    EvidenceChain,
+    ExtractedField,
+    ExtractionMethod,
+    ReconciliationMethod,
+    SourceLocation,
 )
+from schemas.income import IncomeFlag, IncomeResult, IncomeSource, SalaryCredit
+
 
 class IncomeIntelligenceProcessor:
     def __init__(self, mock_mode: bool = True):
@@ -35,18 +38,27 @@ class IncomeIntelligenceProcessor:
 
     def process_income(self, application_id: str, extracted_data: dict, segment: str = "salaried", application_employer_name: str | None = None, document_ids: dict | None = None) -> IncomeResult:
         result = IncomeResult(
-            application_id=application_id, 
+            application_id=application_id,
             segment=segment,
             reconciled_annual_income=0.0,
             verified_monthly_income=0.0,
             income_confidence=1.0
         )
-        
+
         salary_slip_amount = 0.0
         bank_credit_amount = 0.0
         itr_amount = 0.0
         gst_amount = 0.0
-        
+
+        # Source-trust weights differ by segment (build-plan §6.3 salaried vs
+        # §7.2 self-employed — tax documents are most authoritative).
+        is_self_employed = segment == "self_employed"
+        w_itr = 0.90 if is_self_employed else 0.85
+        w_itr_fy2 = 0.80
+        w_gst = 0.75
+        w_bank = 0.65 if is_self_employed else 0.75
+        gst_profit_margin = 0.25  # net income ≈ 25% of turnover (§7.2)
+
         # 1. Parse Salary Slip
         if "salary_slip" in extracted_data:
             slip = extracted_data["salary_slip"]
@@ -74,7 +86,7 @@ class IncomeIntelligenceProcessor:
                     result.anomaly_flags.append(IncomeFlag.EMPLOYER_NAME_MISMATCH)
 
 
-        # 2. Parse ITR
+        # 2. Parse ITR — current FY (and prior FY for 2-year averaging, §7.2)
         if "itr" in extracted_data:
             itr = extracted_data["itr"]
             try:
@@ -83,7 +95,7 @@ class IncomeIntelligenceProcessor:
                     result.income_sources.append(IncomeSource(
                         source_name="itr",
                         annual_amount=itr_amount,
-                        trust_weight=0.85,  # ITR is very high trust
+                        trust_weight=w_itr,  # tax document — highest trust
                         evidence=EvidenceChain(
                             claim=f"itr_total_income={itr_amount}",
                             supporting=self._doc_source("itr", "total_income", itr_amount, 0.95, document_ids),
@@ -94,30 +106,51 @@ class IncomeIntelligenceProcessor:
                     ))
             except ValueError:
                 pass
-                
-        # 3. Parse GST Returns
+
+        if "itr_fy2" in extracted_data:
+            try:
+                itr_fy2_amount = float(extracted_data["itr_fy2"].get("total_income", "0"))
+                if itr_fy2_amount > 0:
+                    result.income_sources.append(IncomeSource(
+                        source_name="itr_fy2",
+                        annual_amount=itr_fy2_amount,
+                        trust_weight=w_itr_fy2,  # prior-year ITR, slightly lower weight
+                        evidence=EvidenceChain(
+                            claim=f"itr_fy2_total_income={itr_fy2_amount}",
+                            supporting=self._doc_source("itr", "total_income", itr_fy2_amount, 0.9, document_ids),
+                            reconciled_value=itr_fy2_amount,
+                            reconciliation_method=ReconciliationMethod.SOURCE_TRUST_WEIGHTED,
+                            confidence=0.9
+                        )
+                    ))
+            except ValueError:
+                pass
+
+        # 3. Parse GST Returns — annual turnover * profit margin (§7.2 fallback
+        #    when ITR is unavailable; otherwise a corroborating signal).
         if "gst_return" in extracted_data:
             gst = extracted_data["gst_return"]
             try:
                 gst_b2b = float(gst.get("turnover_b2b", "0"))
                 gst_b2c = float(gst.get("turnover_b2c", "0"))
-                gst_amount = (gst_b2b + gst_b2c) * 0.10 # Assuming 10% margin as income
+                annual_turnover = gst_b2b + gst_b2c
+                gst_amount = annual_turnover * gst_profit_margin
                 if gst_amount > 0:
                     result.income_sources.append(IncomeSource(
                         source_name="gst_return",
-                        annual_amount=gst_amount * 12, # assuming monthly return, annualize it
-                        trust_weight=0.70,
+                        annual_amount=gst_amount,
+                        trust_weight=w_gst,
                         evidence=EvidenceChain(
-                            claim=f"gst_implied_income={gst_amount * 12}",
-                            supporting=self._doc_source("gst_return", "turnover", gst_amount * 12, 0.85, document_ids),
-                            reconciled_value=gst_amount * 12,
+                            claim=f"gst_implied_income={gst_amount}",
+                            supporting=self._doc_source("gst_return", "turnover", gst_amount, 0.85, document_ids),
+                            reconciled_value=gst_amount,
                             reconciliation_method=ReconciliationMethod.SOURCE_TRUST_WEIGHTED,
                             confidence=0.85
                         )
                     ))
             except ValueError:
                 pass
-                
+
         # 4. Parse Bank Statement
         if "bank_statement" in extracted_data:
             stmt = extracted_data["bank_statement"]
@@ -134,7 +167,7 @@ class IncomeIntelligenceProcessor:
                 result.income_sources.append(IncomeSource(
                     source_name="bank_statement",
                     annual_amount=bank_credit_amount * 12,
-                    trust_weight=0.75,
+                    trust_weight=w_bank,
                     evidence=EvidenceChain(
                         claim=f"bank_avg_credit={bank_credit_amount}",
                         supporting=self._doc_source("bank_statement", "salary_credit", bank_credit_amount, 0.9, document_ids),
