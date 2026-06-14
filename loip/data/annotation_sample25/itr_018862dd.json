@@ -1,0 +1,23 @@
+{
+  "id": "018862dd",
+  "document_type": "itr",
+  "itr_type": "ITR-1 (Sahaj)",
+  "applicant_name": "Fitan Rama",
+  "pan": "KDRAA8227O",
+  "assessment_year": "2026-27",
+  "financial_year": "2025-26",
+  "income_from_salary": 1134816,
+  "income_from_house": 0,
+  "income_from_other": 18070,
+  "business_income": 0,
+  "gross_total_income": 1152886,
+  "sec_80c": 150000,
+  "sec_80d": 0,
+  "total_deductions": 150000,
+  "total_income": 1002886,
+  "tax_payable": 134535,
+  "tds_claimed": 141027,
+  "refund": 6492,
+  "segment": "salaried",
+  "tamper_type": null
+}

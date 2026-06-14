@@ -1,0 +1,18 @@
+{
+  "id": "00f9ef78",
+  "document_type": "aadhaar",
+  "aadhaar_number": "604805933603",
+  "full_name": "Champak Hegde",
+  "date_of_birth": "11/03/1976",
+  "gender": "Male",
+  "address": {
+    "door": "64/U",
+    "street": "Raghavan Circle",
+    "locality": "Ville Nagar",
+    "city": "Surat",
+    "state": "Kerala",
+    "pincode": "297937"
+  },
+  "pincode": "297937",
+  "tamper_type": "synthetic_identity"
+}

@@ -1,0 +1,759 @@
+{
+  "id": "0079eac9",
+  "document_type": "bank_statement",
+  "bank_name": "Kotak Mahindra Bank",
+  "account_number": "07140881337147",
+  "account_holder_name": "Shivansh Cherian",
+  "period_start": "01/12/2025",
+  "period_end": "31/05/2026",
+  "opening_balance": 92753,
+  "closing_balance": 206075.01,
+  "transactions": [
+    {
+      "date": "01/01/2026",
+      "narration": "NACH-HDFC PERSONAL LOAN",
+      "credit": 0,
+      "debit": 12430,
+      "balance": 139727.01
+    },
+    {
+      "date": "01/02/2026",
+      "narration": "NACH-HDFC PERSONAL LOAN",
+      "credit": 0,
+      "debit": 12430,
+      "balance": 180469.01
+    },
+    {
+      "date": "01/02/2026",
+      "narration": "NEFT-SCHOOL FEES",
+      "credit": 0,
+      "debit": 997,
+      "balance": 134982.01
+    },
+    {
+      "date": "01/02/2026",
+      "narration": "UPI-AMAZON",
+      "credit": 0,
+      "debit": 13263,
+      "balance": 102224.01
+    },
+    {
+      "date": "01/02/2026",
+      "narration": "NEFT-RENT PAYMENT",
+      "credit": 0,
+      "debit": 1738,
+      "balance": 100486.01
+    },
+    {
+      "date": "01/03/2026",
+      "narration": "NACH-HDFC PERSONAL LOAN",
+      "credit": 0,
+      "debit": 12430,
+      "balance": 206606.01
+    },
+    {
+      "date": "01/04/2026",
+      "narration": "NACH-HDFC PERSONAL LOAN",
+      "credit": 0,
+      "debit": 12430,
+      "balance": 244130.01
+    },
+    {
+      "date": "01/04/2026",
+      "narration": "UPI-ZOMATO",
+      "credit": 0,
+      "debit": 1157,
+      "balance": 196143.01
+    },
+    {
+      "date": "01/05/2026",
+      "narration": "NACH-HDFC PERSONAL LOAN",
+      "credit": 0,
+      "debit": 12430,
+      "balance": 307887.01
+    },
+    {
+      "date": "01/12/2025",
+      "narration": "NACH-HDFC PERSONAL LOAN",
+      "credit": 0,
+      "debit": 12430,
+      "balance": 199308
+    },
+    {
+      "date": "02/01/2026",
+      "narration": "NACH-BAJAJ FINSERV EMI",
+      "credit": 0,
+      "debit": 7724,
+      "balance": 152157.01
+    },
+    {
+      "date": "02/02/2026",
+      "narration": "NACH-BAJAJ FINSERV EMI",
+      "credit": 0,
+      "debit": 7724,
+      "balance": 192899.01
+    },
+    {
+      "date": "02/03/2026",
+      "narration": "NACH-BAJAJ FINSERV EMI",
+      "credit": 0,
+      "debit": 7724,
+      "balance": 219036.01
+    },
+    {
+      "date": "02/03/2026",
+      "narration": "UPI-AMAZON",
+      "credit": 0,
+      "debit": 1164,
+      "balance": 183610.01
+    },
+    {
+      "date": "02/04/2026",
+      "narration": "NACH-BAJAJ FINSERV EMI",
+      "credit": 0,
+      "debit": 7724,
+      "balance": 256560.01
+    },
+    {
+      "date": "02/04/2026",
+      "narration": "NACH-SIP MUTUAL FUND",
+      "credit": 0,
+      "debit": 7756,
+      "balance": 236374.01
+    },
+    {
+      "date": "02/05/2026",
+      "narration": "NACH-BAJAJ FINSERV EMI",
+      "credit": 0,
+      "debit": 7724,
+      "balance": 320317.01
+    },
+    {
+      "date": "02/12/2025",
+      "narration": "NACH-BAJAJ FINSERV EMI",
+      "credit": 0,
+      "debit": 7724,
+      "balance": 211738
+    },
+    {
+      "date": "02/12/2025",
+      "narration": "POS-DMART",
+      "credit": 0,
+      "debit": 1726,
+      "balance": 181286
+    },
+    {
+      "date": "03/02/2026",
+      "narration": "NEFT-RENT PAYMENT",
+      "credit": 0,
+      "debit": 344,
+      "balance": 164831.01
+    },
+    {
+      "date": "03/03/2026",
+      "narration": "UPI-PETROL PUMP",
+      "credit": 0,
+      "debit": 377,
+      "balance": 178251.01
+    },
+    {
+      "date": "03/05/2026",
+      "narration": "UPI-ZOMATO",
+      "credit": 0,
+      "debit": 1211,
+      "balance": 227141.01
+    },
+    {
+      "date": "04/01/2026",
+      "narration": "POS-DMART",
+      "credit": 0,
+      "debit": 2511,
+      "balance": 137075.01
+    },
+    {
+      "date": "04/01/2026",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 291,
+      "balance": 135318.01
+    },
+    {
+      "date": "04/01/2026",
+      "narration": "UPI-FLIPKART",
+      "credit": 0,
+      "debit": 6561,
+      "balance": 80343.01
+    },
+    {
+      "date": "04/01/2026",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 2298,
+      "balance": 69088.01
+    },
+    {
+      "date": "04/12/2025",
+      "narration": "SAL CR BAJAJ FINA",
+      "credit": 126709,
+      "debit": 0,
+      "balance": 219462
+    },
+    {
+      "date": "05/05/2026",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 19641,
+      "balance": 206075.01
+    },
+    {
+      "date": "06/01/2026",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 1054,
+      "balance": 67321.01
+    },
+    {
+      "date": "06/02/2026",
+      "narration": "ATM WITHDRAWAL",
+      "credit": 0,
+      "debit": 10351,
+      "balance": 124631.01
+    },
+    {
+      "date": "06/02/2026",
+      "narration": "UPI-PHONEPE-ELECTRICITY",
+      "credit": 0,
+      "debit": 131,
+      "balance": 100355.01
+    },
+    {
+      "date": "06/04/2026",
+      "narration": "NEFT-SCHOOL FEES",
+      "credit": 0,
+      "debit": 600,
+      "balance": 235186.01
+    },
+    {
+      "date": "06/05/2026",
+      "narration": "POS-DMART",
+      "credit": 0,
+      "debit": 24036,
+      "balance": 259652.01
+    },
+    {
+      "date": "07/02/2026",
+      "narration": "UPI-PHONEPE-ELECTRICITY",
+      "credit": 0,
+      "debit": 8043,
+      "balance": 115487.01
+    },
+    {
+      "date": "08/01/2026",
+      "narration": "NACH-HDFC CARD",
+      "credit": 0,
+      "debit": 141,
+      "balance": 139586.01
+    },
+    {
+      "date": "08/01/2026",
+      "narration": "NEFT-SCHOOL FEES",
+      "credit": 0,
+      "debit": 1466,
+      "balance": 135609.01
+    },
+    {
+      "date": "09/01/2026",
+      "narration": "UPI-FLIPKART",
+      "credit": 0,
+      "debit": 21885,
+      "balance": 113433.01
+    },
+    {
+      "date": "09/01/2026",
+      "narration": "UPI-FLIPKART",
+      "credit": 0,
+      "debit": 315,
+      "balance": 80028.01
+    },
+    {
+      "date": "09/02/2026",
+      "narration": "NEFT-RENT PAYMENT",
+      "credit": 0,
+      "debit": 15294,
+      "balance": 165175.01
+    },
+    {
+      "date": "09/02/2026",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 304,
+      "balance": 100051.01
+    },
+    {
+      "date": "09/03/2026",
+      "narration": "NACH-HDFC CARD",
+      "credit": 0,
+      "debit": 1502,
+      "balance": 137922.01
+    },
+    {
+      "date": "09/04/2026",
+      "narration": "UPI-ZOMATO",
+      "credit": 0,
+      "debit": 8157,
+      "balance": 206765.01
+    },
+    {
+      "date": "09/12/2025",
+      "narration": "UPI-ZOMATO",
+      "credit": 0,
+      "debit": 7185,
+      "balance": 123444
+    },
+    {
+      "date": "10/01/2026",
+      "narration": "UPI-SWIGGY",
+      "credit": 0,
+      "debit": 341,
+      "balance": 68747.01
+    },
+    {
+      "date": "10/05/2026",
+      "narration": "NEFT-SCHOOL FEES",
+      "credit": 0,
+      "debit": 255,
+      "balance": 238199.01
+    },
+    {
+      "date": "10/12/2025",
+      "narration": "ATM WITHDRAWAL",
+      "credit": 0,
+      "debit": 5245,
+      "balance": 138002
+    },
+    {
+      "date": "11/01/2026",
+      "narration": "UPI-PHONEPE-ELECTRICITY",
+      "credit": 0,
+      "debit": 444,
+      "balance": 66877.01
+    },
+    {
+      "date": "11/05/2026",
+      "narration": "NACH-SIP MUTUAL FUND",
+      "credit": 0,
+      "debit": 3664,
+      "balance": 238454.01
+    },
+    {
+      "date": "11/05/2026",
+      "narration": "UPI-ZOMATO",
+      "credit": 0,
+      "debit": 2265,
+      "balance": 235934.01
+    },
+    {
+      "date": "12/02/2026",
+      "narration": "UPI-IRCTC",
+      "credit": 0,
+      "debit": 1101,
+      "balance": 123530.01
+    },
+    {
+      "date": "12/03/2026",
+      "narration": "UPI-AMAZON",
+      "credit": 0,
+      "debit": 363,
+      "balance": 186658.01
+    },
+    {
+      "date": "12/03/2026",
+      "narration": "NACH-SIP MUTUAL FUND",
+      "credit": 0,
+      "debit": 17140,
+      "balance": 139424.01
+    },
+    {
+      "date": "12/05/2026",
+      "narration": "UPI-PETROL PUMP",
+      "credit": 0,
+      "debit": 23672,
+      "balance": 284019.01
+    },
+    {
+      "date": "13/01/2026",
+      "narration": "UPI-PHONEPE-ELECTRICITY",
+      "credit": 0,
+      "debit": 965,
+      "balance": 64072.01
+    },
+    {
+      "date": "13/02/2026",
+      "narration": "NACH-HDFC CARD",
+      "credit": 0,
+      "debit": 17202,
+      "balance": 135979.01
+    },
+    {
+      "date": "13/04/2026",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 588,
+      "balance": 235786.01
+    },
+    {
+      "date": "13/04/2026",
+      "narration": "NEFT-CASHBACK",
+      "credit": 7980,
+      "debit": 0,
+      "balance": 201332.01
+    },
+    {
+      "date": "13/05/2026",
+      "narration": "ATM WITHDRAWAL",
+      "credit": 0,
+      "debit": 1425,
+      "balance": 225716.01
+    },
+    {
+      "date": "13/12/2025",
+      "narration": "UPI-IRCTC",
+      "credit": 0,
+      "debit": 488,
+      "balance": 164464
+    },
+    {
+      "date": "13/12/2025",
+      "narration": "NEFT-RENT PAYMENT",
+      "credit": 0,
+      "debit": 21217,
+      "balance": 143247
+    },
+    {
+      "date": "14/12/2025",
+      "narration": "NACH-SIP MUTUAL FUND",
+      "credit": 0,
+      "debit": 16334,
+      "balance": 164952
+    },
+    {
+      "date": "15/12/2025",
+      "narration": "ATM WITHDRAWAL",
+      "credit": 0,
+      "debit": 285,
+      "balance": 183012
+    },
+    {
+      "date": "16/01/2026",
+      "narration": "POS-DMART",
+      "credit": 0,
+      "debit": 372,
+      "balance": 68375.01
+    },
+    {
+      "date": "16/03/2026",
+      "narration": "UPI-PETROL PUMP",
+      "credit": 0,
+      "debit": 3674,
+      "balance": 178628.01
+    },
+    {
+      "date": "16/12/2025",
+      "narration": "NACH-SIP MUTUAL FUND",
+      "credit": 0,
+      "debit": 1235,
+      "balance": 122209
+    },
+    {
+      "date": "17/01/2026",
+      "narration": "UPI-IRCTC",
+      "credit": 0,
+      "debit": 1532,
+      "balance": 72743.01
+    },
+    {
+      "date": "17/01/2026",
+      "narration": "NEFT-RENT PAYMENT",
+      "credit": 0,
+      "debit": 1357,
+      "balance": 71386.01
+    },
+    {
+      "date": "17/01/2026",
+      "narration": "INT-INTEREST CREDIT",
+      "credit": 9842,
+      "debit": 0,
+      "balance": 73914.01
+    },
+    {
+      "date": "17/03/2026",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 979,
+      "balance": 177272.01
+    },
+    {
+      "date": "17/05/2026",
+      "narration": "ATM WITHDRAWAL",
+      "credit": 0,
+      "debit": 196,
+      "balance": 307691.01
+    },
+    {
+      "date": "18/02/2026",
+      "narration": "NACH-SIP MUTUAL FUND",
+      "credit": 0,
+      "debit": 4478,
+      "balance": 160353.01
+    },
+    {
+      "date": "18/03/2026",
+      "narration": "UPI-AMAZON",
+      "credit": 0,
+      "debit": 347,
+      "balance": 137575.01
+    },
+    {
+      "date": "19/01/2026",
+      "narration": "NACH-HDFC CARD",
+      "credit": 0,
+      "debit": 16302,
+      "balance": 97131.01
+    },
+    {
+      "date": "19/01/2026",
+      "narration": "POS-DMART",
+      "credit": 0,
+      "debit": 5753,
+      "balance": 74275.01
+    },
+    {
+      "date": "19/01/2026",
+      "narration": "ATM WITHDRAWAL",
+      "credit": 0,
+      "debit": 1840,
+      "balance": 65037.01
+    },
+    {
+      "date": "19/03/2026",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 481,
+      "balance": 176791.01
+    },
+    {
+      "date": "19/04/2026",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 450,
+      "balance": 197300.01
+    },
+    {
+      "date": "19/05/2026",
+      "narration": "NACH-HDFC CARD",
+      "credit": 0,
+      "debit": 331,
+      "balance": 283688.01
+    },
+    {
+      "date": "19/05/2026",
+      "narration": "UPI-IRCTC",
+      "credit": 0,
+      "debit": 7582,
+      "balance": 228352.01
+    },
+    {
+      "date": "19/12/2025",
+      "narration": "NEFT-RENT PAYMENT",
+      "credit": 0,
+      "debit": 5581,
+      "balance": 132421
+    },
+    {
+      "date": "20/05/2026",
+      "narration": "ATM WITHDRAWAL",
+      "credit": 0,
+      "debit": 980,
+      "balance": 242118.01
+    },
+    {
+      "date": "21/03/2026",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 2625,
+      "balance": 188825.01
+    },
+    {
+      "date": "21/03/2026",
+      "narration": "POS-DMART",
+      "credit": 0,
+      "debit": 1804,
+      "balance": 187021.01
+    },
+    {
+      "date": "21/03/2026",
+      "narration": "POS-DMART",
+      "credit": 0,
+      "debit": 20227,
+      "balance": 156564.01
+    },
+    {
+      "date": "21/12/2025",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 246,
+      "balance": 132175
+    },
+    {
+      "date": "22/02/2026",
+      "narration": "UPI-FLIPKART",
+      "credit": 0,
+      "debit": 7172,
+      "balance": 153181.01
+    },
+    {
+      "date": "23/05/2026",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 182,
+      "balance": 259470.01
+    },
+    {
+      "date": "23/12/2025",
+      "narration": "NACH-HDFC CARD",
+      "credit": 0,
+      "debit": 1546,
+      "balance": 130629
+    },
+    {
+      "date": "23/12/2025",
+      "narration": "UPI-ZOMATO",
+      "credit": 0,
+      "debit": 16772,
+      "balance": 105437
+    },
+    {
+      "date": "24/03/2026",
+      "narration": "NACH-SIP MUTUAL FUND",
+      "credit": 0,
+      "debit": 15156,
+      "balance": 191450.01
+    },
+    {
+      "date": "25/04/2026",
+      "narration": "SAL CR BAJAJ FINA",
+      "credit": 126709,
+      "debit": 0,
+      "balance": 264284.01
+    },
+    {
+      "date": "25/04/2026",
+      "narration": "NEFT-RENT PAYMENT",
+      "credit": 0,
+      "debit": 159,
+      "balance": 235027.01
+    },
+    {
+      "date": "25/04/2026",
+      "narration": "POS-RELIANCE FRESH",
+      "credit": 0,
+      "debit": 20105,
+      "balance": 214922.01
+    },
+    {
+      "date": "25/04/2026",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 3339,
+      "balance": 197750.01
+    },
+    {
+      "date": "25/05/2026",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 16372,
+      "balance": 243098.01
+    },
+    {
+      "date": "26/01/2026",
+      "narration": "SAL CR BAJAJ FINA",
+      "credit": 54444.00812961645,
+      "debit": 0,
+      "balance": 159881.01
+    },
+    {
+      "date": "26/02/2026",
+      "narration": "SALARY BAJAJ FINANCE",
+      "credit": 126709,
+      "debit": 0,
+      "balance": 200623.01
+    },
+    {
+      "date": "26/03/2026",
+      "narration": "NEFT-SCHOOL FEES",
+      "credit": 0,
+      "debit": 1308,
+      "balance": 182302.01
+    },
+    {
+      "date": "26/12/2025",
+      "narration": "UPI-IRCTC",
+      "credit": 0,
+      "debit": 1980,
+      "balance": 197328
+    },
+    {
+      "date": "27/03/2026",
+      "narration": "UPI-SWIGGY",
+      "credit": 0,
+      "debit": 1884,
+      "balance": 184774.01
+    },
+    {
+      "date": "27/04/2026",
+      "narration": "UPI-IRCTC",
+      "credit": 0,
+      "debit": 2791,
+      "balance": 193352.01
+    },
+    {
+      "date": "27/05/2026",
+      "narration": "NEFT-SAL-BAJAJ FINANCE",
+      "credit": 126709,
+      "debit": 0,
+      "balance": 328041.01
+    },
+    {
+      "date": "28/01/2026",
+      "narration": "UPI-PETROL PUMP",
+      "credit": 0,
+      "debit": 10227,
+      "balance": 86904.01
+    },
+    {
+      "date": "28/03/2026",
+      "narration": "NEFT-SAL-BAJAJ FINANCE",
+      "credit": 126709,
+      "debit": 0,
+      "balance": 226760.01
+    },
+    {
+      "date": "28/04/2026",
+      "narration": "UPI-SWIGGY",
+      "credit": 0,
+      "debit": 5676,
+      "balance": 201089.01
+    },
+    {
+      "date": "28/12/2025",
+      "narration": "NACH-TATA AIA INSURANCE",
+      "credit": 0,
+      "debit": 14031,
+      "balance": 183297
+    }
+  ],
+  "salary_amount": 126709,
+  "employer_name": "Bajaj Finance",
+  "branch": "Surat Ville Nagar",
+  "tamper_type": "income_deflation"
+}

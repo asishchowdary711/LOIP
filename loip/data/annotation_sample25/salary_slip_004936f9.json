@@ -1,0 +1,21 @@
+{
+  "id": "004936f9",
+  "document_type": "salary_slip",
+  "employer_name": "Wipro",
+  "employer_tier": 2,
+  "employee_name": "Leena Vasa",
+  "employee_pan": "UDEUP3408J",
+  "uan": "672081768120",
+  "pay_month": "November",
+  "pay_year": 2026,
+  "tamper_type": null,
+  "basic": 59428,
+  "hra": 26474,
+  "conveyance": 5000,
+  "special_allowance": 6199,
+  "gross_pay": 97101,
+  "pf_deduction": 7131,
+  "professional_tax": 250,
+  "tds_deduction": 18090,
+  "net_pay": 71630
+}

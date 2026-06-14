@@ -1,0 +1,21 @@
+{
+  "id": "007194d6",
+  "document_type": "salary_slip",
+  "employer_name": "Infosys",
+  "employer_tier": 2,
+  "employee_name": "Meera Dey",
+  "employee_pan": "KYALO9804N",
+  "uan": "",
+  "pay_month": "May",
+  "pay_year": 2026,
+  "tamper_type": "missing_fields",
+  "basic": 85703,
+  "hra": 34858,
+  "conveyance": 1600,
+  "special_allowance": 25141,
+  "gross_pay": 147302,
+  "pf_deduction": 10284,
+  "professional_tax": 0,
+  "tds_deduction": "",
+  "net_pay": 128497
+}

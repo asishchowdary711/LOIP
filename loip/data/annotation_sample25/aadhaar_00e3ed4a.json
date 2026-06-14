@@ -1,0 +1,18 @@
+{
+  "id": "00e3ed4a",
+  "document_type": "aadhaar",
+  "aadhaar_number": "901023656774",
+  "full_name": "Azad Walla",
+  "date_of_birth": "19/10/1970",
+  "gender": "Female",
+  "address": {
+    "door": "113/J",
+    "street": "Chaudhuri Circle",
+    "locality": "Ville Nagar",
+    "city": "Chennai",
+    "state": "Tamil Nadu",
+    "pincode": "721709"
+  },
+  "pincode": "721709",
+  "tamper_type": null
+}

@@ -1,0 +1,23 @@
+{
+  "id": "00ad00e3",
+  "document_type": "itr",
+  "itr_type": "ITR-1 (Sahaj)",
+  "applicant_name": "Anay Gaba",
+  "pan": "VQBFB7769H",
+  "assessment_year": "2026-27",
+  "financial_year": "2025-26",
+  "income_from_salary": 2210000,
+  "income_from_house": 0,
+  "income_from_other": 10835,
+  "business_income": 0,
+  "gross_total_income": 3375252,
+  "sec_80c": 121725,
+  "sec_80d": 0,
+  "total_deductions": 121725,
+  "total_income": 2099110,
+  "tax_payable": 339655,
+  "tds_claimed": 304658,
+  "refund": 0,
+  "segment": "salaried",
+  "tamper_type": "income_inflation"
+}

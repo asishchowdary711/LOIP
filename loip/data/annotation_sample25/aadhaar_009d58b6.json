@@ -1,0 +1,18 @@
+{
+  "id": "009d58b6",
+  "document_type": "aadhaar",
+  "aadhaar_number": "518768344248",
+  "full_name": "Mitali Dash",
+  "date_of_birth": "19/05/2002",
+  "gender": "Female",
+  "address": {
+    "door": "57/N",
+    "street": "Gupta Street",
+    "locality": "Ville Nagar",
+    "city": "Hyderabad",
+    "state": "Rajasthan",
+    "pincode": "418615"
+  },
+  "pincode": "418615",
+  "tamper_type": "synthetic_identity"
+}
