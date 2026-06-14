@@ -144,6 +144,11 @@
                     <span style="color: var(--muted);">
                         ({{ field.source.document_type.value }} · {{ field.source.extraction_method.value }})
                     </span>
+                    {% if field.source.document_id %}
+                    <div style="font-family: monospace; font-size: 0.7rem; color: var(--muted); padding-left: 0.7rem;">
+                        &#128274; minio://{{ field.source.document_id }}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
                 {% endif %}

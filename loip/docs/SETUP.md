@@ -91,13 +91,33 @@ cd loip
 
 ## Docker Compose (infrastructure services)
 
-`docker-compose.yml` (repo root) defines 13 services: PostgreSQL, MinIO,
-OpenSearch, Neo4j, Kafka/Zookeeper, Redis, MLflow, Prometheus, Grafana, and
-Ollama. The file has been statically validated (valid YAML, correct volume
-wiring) but **has not been run** — Docker is not installed on this
-development machine. `.env.example` documents all required environment
-variables for these services; copy it to `.env` and fill in real values
-before running `docker-compose up`.
+`docker-compose.yml` (in `loip/`) defines the full service set: PostgreSQL,
+MinIO, OpenSearch, Neo4j, Kafka/Zookeeper, Redis, MLflow, Prometheus,
+Grafana, and Ollama.
+
+The **core data-plane services** (PostgreSQL, MinIO + bucket init, Redis) are
+the ones wired into the running app today. Bring them up with:
+
+```bash
+cd loip
+docker compose up -d postgres minio minio-init redis
+docker compose ps          # all should be "healthy"
+```
+
+`minio-init` creates one bucket per document type plus `evidence`, `models`,
+and `annotations`. The MinIO console is at http://localhost:9001
+(minioadmin / minioadmin); the S3 API is on :9000.
+
+When MinIO is up, `POST /onboard` and the demo seeder persist each uploaded
+document to its bucket and stamp the object id onto every document-derived
+evidence field (`SourceLocation.document_id`), making figures traceable to a
+stored object. If MinIO is **not** running, both paths degrade gracefully —
+the pipeline still runs, evidence chains just omit document ids.
+
+The heavier services (OpenSearch, Neo4j, Kafka, MLflow, Prometheus, Grafana,
+Ollama) are defined and start with `docker compose up -d`, but are not yet
+wired into the request path. `.env.example` documents all variables; copy it
+to `.env` to override the compose defaults.
 
 ## Environment variables
 

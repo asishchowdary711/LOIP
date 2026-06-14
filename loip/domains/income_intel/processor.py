@@ -2,13 +2,38 @@ from loip.models.xgboost_wrapper import XGBoostWrapper
 from schemas.income import (
     IncomeResult, IncomeSource, SalaryCredit, IncomeFlag
 )
-from schemas.evidence import EvidenceChain, ReconciliationMethod
+from schemas.evidence import (
+    EvidenceChain, ExtractedField, ReconciliationMethod, SourceLocation,
+    DocumentType, ExtractionMethod,
+)
 
 class IncomeIntelligenceProcessor:
     def __init__(self, mock_mode: bool = True):
         self.xgboost = XGBoostWrapper(mock_mode=mock_mode)
 
-    def process_income(self, application_id: str, extracted_data: dict, segment: str = "salaried", application_employer_name: str | None = None) -> IncomeResult:
+    def _doc_source(
+        self, doc_type: str, field_name: str, value: float | str,
+        confidence: float, document_ids: dict | None,
+    ) -> list[ExtractedField]:
+        """Build a document-backed ExtractedField when the source document has
+        been stored (``document_ids[doc_type]`` is a MinIO object id). Returns
+        an empty list otherwise, so evidence chains stay valid without storage."""
+        if not document_ids or doc_type not in document_ids:
+            return []
+        return [ExtractedField(
+            field_name=field_name,
+            raw_value=str(value),
+            confidence=confidence,
+            source=SourceLocation(
+                document_id=document_ids[doc_type],
+                document_type=DocumentType(doc_type),
+                is_synthetic=True,
+                extraction_method=ExtractionMethod.QWEN2_5_VL,
+                model_version="qwen2.5-vl-mock",
+            ),
+        )]
+
+    def process_income(self, application_id: str, extracted_data: dict, segment: str = "salaried", application_employer_name: str | None = None, document_ids: dict | None = None) -> IncomeResult:
         result = IncomeResult(
             application_id=application_id, 
             segment=segment,
@@ -34,7 +59,7 @@ class IncomeIntelligenceProcessor:
                         trust_weight=0.65,
                         evidence=EvidenceChain(
                             claim=f"salary_slip_net_pay={salary_slip_amount}",
-                            supporting=[],
+                            supporting=self._doc_source("salary_slip", "net_pay", salary_slip_amount, 0.9, document_ids),
                             reconciled_value=salary_slip_amount,
                             reconciliation_method=ReconciliationMethod.SOURCE_TRUST_WEIGHTED,
                             confidence=0.9
@@ -61,7 +86,7 @@ class IncomeIntelligenceProcessor:
                         trust_weight=0.85,  # ITR is very high trust
                         evidence=EvidenceChain(
                             claim=f"itr_total_income={itr_amount}",
-                            supporting=[],
+                            supporting=self._doc_source("itr", "total_income", itr_amount, 0.95, document_ids),
                             reconciled_value=itr_amount,
                             reconciliation_method=ReconciliationMethod.SOURCE_TRUST_WEIGHTED,
                             confidence=0.95
@@ -84,7 +109,7 @@ class IncomeIntelligenceProcessor:
                         trust_weight=0.70,
                         evidence=EvidenceChain(
                             claim=f"gst_implied_income={gst_amount * 12}",
-                            supporting=[],
+                            supporting=self._doc_source("gst_return", "turnover", gst_amount * 12, 0.85, document_ids),
                             reconciled_value=gst_amount * 12,
                             reconciliation_method=ReconciliationMethod.SOURCE_TRUST_WEIGHTED,
                             confidence=0.85
@@ -112,7 +137,7 @@ class IncomeIntelligenceProcessor:
                     trust_weight=0.75,
                     evidence=EvidenceChain(
                         claim=f"bank_avg_credit={bank_credit_amount}",
-                        supporting=[],
+                        supporting=self._doc_source("bank_statement", "salary_credit", bank_credit_amount, 0.9, document_ids),
                         reconciled_value=bank_credit_amount,
                         reconciliation_method=ReconciliationMethod.SOURCE_TRUST_WEIGHTED,
                         confidence=0.9

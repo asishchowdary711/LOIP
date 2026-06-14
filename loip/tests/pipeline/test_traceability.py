@@ -36,12 +36,67 @@ async def test_consent_required_before_bureau_pull():
         )
 
 
-@pytest.mark.skip(
-    reason="Requires MinIO document storage integration (Phase 2+); SourceLocation.document_id "
-    "is not yet wired to real stored objects in mock mode."
-)
-def test_source_chains_trace_to_minio_documents():
-    pass
+def _minio_store_or_skip():
+    """Return a DocumentStore if MinIO is reachable, else skip the test.
+
+    Keeps the default suite green without Docker; runs for real when the
+    stack from docker-compose.yml is up (see docs/RUNBOOK.md)."""
+    try:
+        from loip.storage import DocumentStore
+
+        store = DocumentStore()
+        # force a connection check
+        store.client.bucket_exists("evidence")
+        return store
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"MinIO not reachable: {exc}")
+
+
+@pytest.mark.asyncio
+async def test_source_chains_trace_to_minio_documents():
+    import numpy as np
+
+    from schemas.decision import LoanApplication
+    from loip.pipelines.onboarding import OnboardingPipeline
+
+    store = _minio_store_or_skip()
+
+    pipeline = OnboardingPipeline(mock_mode=True)
+    app = LoanApplication(
+        application_id="TEST-MINIO-TRACE",
+        applicant_name="Mock User",
+        loan_amount=500000,
+        tenure_months=36,
+        employment_type="salaried",
+        employment_tier=2,
+        employer_name="Acme Corp",
+    )
+    images = [
+        np.zeros((100, 100, 3), dtype=np.uint8),
+        np.zeros((101, 101, 3), dtype=np.uint8),
+        np.zeros((102, 102, 3), dtype=np.uint8),
+        np.zeros((103, 103, 3), dtype=np.uint8),
+    ]
+    raw_documents = [b"fake-pan", b"fake-aadhaar", b"fake-salary-slip", b"fake-bank"]
+    app_data = {"aadhaar_otp": "123456", "full_name": "Mock User", "date_of_birth": "01/01/1990"}
+
+    decision = await pipeline.execute(
+        app, images, app_data, raw_documents=raw_documents, document_store=store,
+    )
+
+    # At least one document-backed evidence field must exist and resolve to a
+    # real MinIO object.
+    document_fields = [
+        field
+        for chain in decision.income_result.evidence_chains
+        for field in chain.supporting
+        if field.source.document_id
+    ]
+    assert document_fields, "expected document-backed evidence fields with a SourceLocation.document_id"
+    for field in document_fields:
+        assert store.exists(field.source.document_id), (
+            f"document_id {field.source.document_id} does not resolve to a MinIO object"
+        )
 
 
 @pytest.mark.asyncio

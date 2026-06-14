@@ -70,6 +70,23 @@ DEMO_SCENARIOS: list[dict] = [
 ]
 
 
+def _document_store_and_bytes(images):
+    """Best-effort MinIO store + PNG-encoded mock-image bytes, so seeded demo
+    cases get document-backed evidence chains. Returns (store, raw_bytes) or
+    (None, None) if MinIO is unavailable."""
+    try:
+        import cv2
+
+        from loip.storage import DocumentStore
+
+        store = DocumentStore()
+        raw = [cv2.imencode(".png", img)[1].tobytes() for img in images]
+        return store, raw
+    except Exception as exc:  # noqa: BLE001 - degrade gracefully if MinIO is down
+        logger.warning("MinIO unavailable for demo seeding (%s); evidence chains omit document ids", exc)
+        return None, None
+
+
 async def seed_demo_cases() -> int:
     """Seed demo review cases if the queue is empty. Returns count seeded."""
     if review_processor.get_queue():
@@ -78,6 +95,7 @@ async def seed_demo_cases() -> int:
 
     pipeline = OnboardingPipeline(mock_mode=True)
     images = build_mock_images()
+    document_store, raw_documents = _document_store_and_bytes(images)
     seeded = 0
 
     for sc in DEMO_SCENARIOS:
@@ -95,7 +113,11 @@ async def seed_demo_cases() -> int:
         application_data["date_of_birth"] = _MOCK_DOB
         application_data["aadhaar_otp"] = "123456"
 
-        decision = await pipeline.execute(application, images, application_data)
+        decision = await pipeline.execute(
+            application, images, application_data,
+            raw_documents=raw_documents,
+            document_store=document_store,
+        )
         # pipeline.execute stores explainability and creates a case on its OWN
         # ReviewProcessor instance; register it on the web's shared processor too.
         case = review_processor.create_review_case(decision)

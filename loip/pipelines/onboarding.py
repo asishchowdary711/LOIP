@@ -24,15 +24,24 @@ class OnboardingPipeline(BasePipeline):
         self.cibil_client = CIBILClient()
         self.cibil_client._mock = mock_mode
 
-    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict) -> OnboardingDecision:
+    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict, raw_documents: list[bytes] | None = None, document_store=None) -> OnboardingDecision:
+        # PDF-rendered document classes vs. image-based ones (for storage ext).
+        pdf_doc_classes = {"salary_slip", "bank_statement", "itr", "form16", "gst_return"}
         extracted_data = {}
-        for img in images:
+        document_ids: dict[str, str] = {}
+        for i, img in enumerate(images):
             doc_result = self.doc_processor.process(img)
             doc_class = doc_result["classification"].document_class.value
             fields = {}
             for f in doc_result["extraction"].fields:
                 fields[f.name] = f.value
             extracted_data[doc_class] = fields
+
+            # Persist the source document to MinIO and record its id so
+            # document-derived evidence can trace back to a real object.
+            if document_store is not None and raw_documents is not None and i < len(raw_documents):
+                ext = "pdf" if doc_class in pdf_doc_classes else "png"
+                document_ids[doc_class] = document_store.store(doc_class, raw_documents[i], ext=ext)
 
         selfie_img = images[-1] if len(images) > 1 else None
         doc_face_img = images[0] if images else None
@@ -49,7 +58,8 @@ class OnboardingPipeline(BasePipeline):
             application.application_id,
             extracted_data,
             segment=application.employment_type,
-            application_employer_name=application.employer_name
+            application_employer_name=application.employer_name,
+            document_ids=document_ids,
         )
 
         affordability_result = self.affordability_processor.process_affordability(
