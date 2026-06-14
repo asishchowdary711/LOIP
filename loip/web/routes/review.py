@@ -1,5 +1,7 @@
 """Human review API routes — queue, case detail, override submission."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -12,6 +14,8 @@ from loip.domains.human_review.schemas import (
     ReviewQueueSummary,
     ReviewStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/review", tags=["Human Review"])
 review_processor = ReviewProcessor(mock_mode=True)
@@ -72,9 +76,26 @@ async def submit_override(case_id: str, request: OverrideRequest):
     if case.status == ReviewStatus.COMPLETED:
         raise HTTPException(status_code=409, detail="Case already completed")
 
+    original_decision = case.system_decision.value
     override = review_processor.submit_override(case_id, request)
     if override is None:
         raise HTTPException(status_code=500, detail="Failed to submit override")
+
+    try:
+        from loip import persistence
+
+        await persistence.save_override(
+            case.application_id,
+            reviewer_id=request.reviewer_id,
+            original_decision=original_decision,
+            override_decision=request.override_decision.value,
+            reason_code=request.reason_code.value,
+            notes=request.notes,
+            review_status=case.status.value,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not persist override for %s: %s", case.application_id, exc)
+
     return override
 
 

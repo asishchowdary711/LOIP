@@ -69,6 +69,11 @@ URL from the **Ports** tab.
 - **Submit an override:** pick a decision + reason code + notes → the case
   flips to `completed` and the override is captured for the retraining
   feedback loop.
+- **Persistence (optional flourish):** restart the server and reopen
+  `/ui/queue` — the queue, decisions, evidence, and your override are still
+  there. State lives in Postgres (`docker compose ps`), documents in MinIO
+  (console at http://localhost:9001), and `GET /health/ready` shows both
+  connected.
 
 ## 6. Show the API (2 min)
 
@@ -88,17 +93,19 @@ cd /workspaces/LOIP/loip
 PYTHONPATH=. .venv/bin/python -m pytest -q
 ```
 
-74 passed, 7 skipped (the skips require the full 10,500-doc corpus / DocVQA
-weights / `.venv-ml` — see `docs/DATA_GUIDANCE_NOTES.md`).
+With the Docker stack up: **77 passed, 6 skipped** (the MinIO + Postgres
+integration tests run for real; the skips require the full 10,500-doc corpus
+/ DocVQA weights / `.venv-ml` — see `docs/DATA_GUIDANCE_NOTES.md`). Without
+Docker the integration tests skip instead, so the suite still passes.
 
 ## What to frame as "future phases" (don't demo)
 
 - Real OCR/VLM inference (LayoutLMv3 / Donut / Qwen2.5-VL) — wrappers exist,
   weights deferred (`docs/RUNBOOK.md` → "Phase B activation").
-- Docker stack (Postgres/MinIO/Neo4j/Kafka) — `docker-compose.yml` is
-  written but not run on this machine.
+- Heavier compose services (Neo4j, Kafka, OpenSearch, MLflow, Grafana,
+  Ollama) — defined in `docker-compose.yml` but not yet in the request path
+  (Postgres + MinIO are wired and persistent).
 - Face verification / liveness / V-KYC — Phase 2 stubs.
-- `SourceLocation.document_id` → live MinIO objects — Phase 2 wiring.
 
 > If a real LLM key is ever needed (e.g. running the Qwen3 copilot with
 > `mock_mode=False`), source it from OpenRouter or Bytez and set it in

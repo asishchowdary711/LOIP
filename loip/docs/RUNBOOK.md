@@ -19,6 +19,35 @@ PYTHONPATH=/workspaces/LOIP loip/.venv/bin/uvicorn loip.web.api:app --host 0.0.0
 > with separate `review_processor` / explainability singletons, so the
 > review queue shows up empty. Always load `loip.web.api`.
 
+### Persistence (Postgres)
+
+On startup the app **rehydrates the review queue from Postgres**
+(`loip/web/startup.py` → `bootstrap_review_console`): applications,
+decisions, evidence chains, and reviewer overrides survive restarts. If the
+database is empty it seeds 7 demo cases and persists them; if Postgres is
+unreachable it falls back to in-memory-only demo data so the console still
+works without the Docker stack.
+
+Bring up the database and apply migrations before first run:
+
+```bash
+cd loip
+docker compose up -d postgres minio minio-init redis
+PYTHONPATH=. DATABASE_URL=postgresql+asyncpg://loip:changeme@localhost:5432/loip \
+  .venv/bin/alembic upgrade head
+```
+
+`GET /health/ready` reports live Postgres + MinIO connectivity (other
+compose services are defined but not yet in the request path → reported as
+`null`).
+
+To reset demo data to a clean 7-pending state:
+
+```bash
+docker exec loip-postgres-1 psql -U loip -d loip \
+  -c "TRUNCATE applications, evidence_chains, consent_records, review_overrides, audit_log;"
+```
+
 On startup the app seeds 7 demo review cases (`loip/web/startup.py`,
 mock-mode) so the review console has data immediately. Open:
 

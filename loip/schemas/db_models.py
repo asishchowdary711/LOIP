@@ -40,6 +40,12 @@ class ApplicationRecord(Base):
     decision: Mapped[str | None] = mapped_column(String(20), nullable=True)
     risk_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     reason_codes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    review_flags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Full serialized OnboardingDecision + ExplainabilityResult, so the review
+    # console can rehydrate complete case detail (identity/income/affordability/
+    # bureau/evidence + SHAP/copilot) after a restart.
+    decision_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    explainability_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_applications_status", "status"),

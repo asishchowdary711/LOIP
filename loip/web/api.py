@@ -15,12 +15,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from .startup import seed_demo_cases
+    from .startup import bootstrap_review_console
 
     try:
-        await seed_demo_cases()
+        await bootstrap_review_console()
     except Exception:
-        logger.exception("Demo case seeding failed; review console will start empty")
+        logger.exception("Review console bootstrap failed; it will start empty")
     yield
 
 
@@ -53,17 +53,31 @@ def health_check():
 
 
 @app.get("/health/ready")
-def readiness_check():
+async def readiness_check():
+    from loip import persistence
+
+    postgres_ok = await persistence.healthcheck()
+
+    minio_ok = False
+    try:
+        from loip.storage import DocumentStore
+
+        minio_ok = DocumentStore(ensure_buckets=False).client.bucket_exists("evidence")
+    except Exception:  # noqa: BLE001
+        minio_ok = False
+
+    # Wired and health-checked today: Postgres + MinIO. The rest are defined in
+    # docker-compose.yml but not yet in the request path (reported as None).
     deps = {
-        "postgresql": True,
-        "minio": True,
-        "opensearch": True,
-        "neo4j": True,
-        "redis": True,
-        "kafka": True,
+        "postgresql": postgres_ok,
+        "minio": minio_ok,
+        "redis": None,
+        "opensearch": None,
+        "neo4j": None,
+        "kafka": None,
     }
-    all_ready = all(deps.values())
-    return {"status": "ready" if all_ready else "degraded", "dependencies": deps}
+    wired_ok = postgres_ok and minio_ok
+    return {"status": "ready" if wired_ok else "degraded", "dependencies": deps}
 
 
 @app.get("/health/live")

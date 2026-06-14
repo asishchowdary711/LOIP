@@ -1,5 +1,6 @@
 """Jinja2 template-rendered UI routes for the review console."""
 
+import logging
 import os
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -15,6 +16,8 @@ from loip.domains.human_review.schemas import (
 from loip.schemas.decision import Decision
 from loip.web.routes.audit import _explainability_store
 from loip.web.routes.review import review_processor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ui", tags=["UI"])
 templates = Jinja2Templates(
@@ -135,5 +138,23 @@ async def submit_override_form(
         reason_code=OverrideReasonCode(reason_code),
         notes=notes,
     )
+    original_decision = case.system_decision.value
     review_processor.submit_override(case_id, request)
+
+    # Persist best-effort so the override and new status survive restarts.
+    try:
+        from loip import persistence
+
+        await persistence.save_override(
+            case.application_id,
+            reviewer_id=reviewer_id,
+            original_decision=original_decision,
+            override_decision=request.override_decision.value,
+            reason_code=request.reason_code.value,
+            notes=request.notes,
+            review_status=case.status.value,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not persist override for %s: %s", case.application_id, exc)
+
     return RedirectResponse(url=f"/ui/review/{case_id}", status_code=303)

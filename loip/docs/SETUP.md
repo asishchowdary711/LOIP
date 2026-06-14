@@ -57,18 +57,30 @@ repo, so `.venv-ml` is only needed to retrain them
 (`scripts/training/train_*.py`) or run their tests
 (`.venv-ml/bin/python -m pytest tests/models/ -q`).
 
-## Database (SQLite dev path)
+## Database
 
-Production targets PostgreSQL (see `docker-compose.yml`), but for local
-development without Docker, Alembic migrations also run against SQLite:
+The running web app persists to **PostgreSQL** (from `docker-compose.yml`).
+Bring it up and apply migrations:
 
 ```bash
 cd loip
+docker compose up -d postgres minio minio-init redis
+PYTHONPATH=. DATABASE_URL=postgresql+asyncpg://loip:changeme@localhost:5432/loip \
+  .venv/bin/alembic upgrade head
+```
+
+Migrations `001` (initial schema) and `002` (full decision/explainability
+JSON on `applications`, for queue rehydration) apply cleanly against
+Postgres. The app also runs `create_all` at startup as a safety net.
+
+For local work without Docker, the same migrations run against SQLite:
+
+```bash
 DATABASE_URL=sqlite+aiosqlite:///data/dev.db .venv/bin/alembic upgrade head
 ```
 
-Migration `001_initial_schema` has been verified to apply cleanly (`upgrade
-head` / `downgrade base`) against this SQLite path.
+If Postgres is unreachable at startup the web app degrades gracefully to
+in-memory demo data (see `docs/RUNBOOK.md` → Persistence).
 
 ## Running tests
 

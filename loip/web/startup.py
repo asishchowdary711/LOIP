@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import logging
 
+from loip import persistence
+from loip.domains.human_review.schemas import ReviewStatus
 from loip.evaluate import build_mock_images
 from loip.pipelines.onboarding import OnboardingPipeline
 from loip.schemas.decision import LoanApplication
+from loip.web.routes.audit import _explainability_store, store_explainability
 from loip.web.routes.review import review_processor
 
 logger = logging.getLogger(__name__)
@@ -122,7 +125,58 @@ async def seed_demo_cases() -> int:
         # ReviewProcessor instance; register it on the web's shared processor too.
         case = review_processor.create_review_case(decision)
         case.applicant_name = sc["display_name"]
+
+        # Persist best-effort so the queue survives restarts.
+        try:
+            await persistence.save_decision(
+                decision,
+                applicant_name=sc["display_name"],
+                explainability=_explainability_store.get(decision.application_id),
+                review_status=ReviewStatus.PENDING.value,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not persist seeded case %s: %s", sc["application_id"], exc)
+
         seeded += 1
 
     logger.info("Seeded %d demo review cases", seeded)
     return seeded
+
+
+def _to_review_status(value: str | None) -> ReviewStatus:
+    try:
+        return ReviewStatus(value)
+    except (ValueError, TypeError):
+        return ReviewStatus.PENDING
+
+
+async def _rehydrate_from_db() -> int:
+    """Rebuild the in-memory review queue from persisted decisions. Returns the
+    number of cases restored (0 if the DB is empty or unreachable)."""
+    rows = await persistence.load_decisions()
+    for row in rows:
+        decision = row["decision"]
+        case = review_processor.create_review_case(decision)
+        case.applicant_name = row["applicant_name"]
+        case.status = _to_review_status(row["status"])
+        if row["explainability"] is not None:
+            store_explainability(decision.application_id, row["explainability"])
+    return len(rows)
+
+
+async def bootstrap_review_console() -> int:
+    """Rehydrate the review queue from Postgres; if empty, seed demo cases.
+
+    Falls back to in-memory-only demo seeding if Postgres is unreachable, so
+    the console still works without the Docker stack.
+    """
+    try:
+        await persistence.init_models()
+        restored = await _rehydrate_from_db()
+        if restored:
+            logger.info("Rehydrated %d review cases from Postgres", restored)
+            return restored
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Postgres unavailable (%s); seeding in-memory demo data only", exc)
+
+    return await seed_demo_cases()
