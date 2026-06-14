@@ -5,7 +5,7 @@
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <div>
         <h2>{{ case.applicant_name }}</h2>
-        <span style="color: var(--muted); font-size: 0.85rem;">{{ case.application_id }} &middot; &#8377;{{ "{:,.0f}"|format(case.loan_amount) }}</span>
+        <span style="color: var(--muted); font-size: 0.85rem;">{{ case.application_id }} &middot; &#8377;{{ case.loan_amount | inr }}</span>
     </div>
     <span class="badge badge-{{ case.system_decision.value }}" style="font-size: 1rem; padding: 0.4em 1em;">
         {{ case.system_decision.value|upper }}
@@ -46,7 +46,7 @@
             <h2>Income Assessment</h2>
             <div class="field-row">
                 <span class="label">Verified Monthly Income</span>
-                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.income_result.verified_monthly_income) }}</span>
+                <span class="value">&#8377;{{ decision.income_result.verified_monthly_income | inr }}</span>
             </div>
             <div class="field-row">
                 <span class="label">Income Confidence</span>
@@ -75,15 +75,15 @@
             </div>
             <div class="field-row">
                 <span class="label">Existing Obligations</span>
-                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.affordability_result.existing_obligations) }}/mo</span>
+                <span class="value">&#8377;{{ decision.affordability_result.existing_obligations | inr }}/mo</span>
             </div>
             <div class="field-row">
                 <span class="label">Proposed EMI</span>
-                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.affordability_result.proposed_emi) }}/mo</span>
+                <span class="value">&#8377;{{ decision.affordability_result.proposed_emi | inr }}/mo</span>
             </div>
             <div class="field-row">
                 <span class="label">Disposable Income</span>
-                <span class="value">&#8377;{{ "{:,.0f}"|format(decision.affordability_result.disposable_income) }}/mo</span>
+                <span class="value">&#8377;{{ decision.affordability_result.disposable_income | inr }}/mo</span>
             </div>
             <div class="field-row">
                 <span class="label">Cashflow Stability</span>
@@ -112,6 +112,45 @@
                 <span class="value">{% if decision.bureau_result.dpd_90_plus %}Yes{% else %}No{% endif %}</span>
             </div>
         </div>
+
+        {% if evidence_chains %}
+        <div class="card">
+            <h2>Evidence Chains ({{ evidence_chains|length }})</h2>
+            <p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem;">
+                Every figure traced to its source document or API.
+            </p>
+            {% for chain in evidence_chains %}
+            <div style="border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.6rem; margin-bottom: 0.6rem;">
+                <div style="font-weight: 500; font-size: 0.85rem;">{{ chain.claim }}</div>
+                <div class="field-row">
+                    <span class="label">Reconciled Value</span>
+                    <span class="value">{{ chain.reconciled_value }}</span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Method</span>
+                    <span class="value">
+                        <span class="badge badge-pending">{{ chain.reconciliation_method.value|replace('_', ' ') }}</span>
+                    </span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Confidence</span>
+                    <span class="value">{{ "%.0f"|format(chain.confidence * 100) }}%</span>
+                </div>
+                {% if chain.supporting %}
+                <div style="margin-top: 0.4rem; font-size: 0.75rem; color: var(--muted);">Sources:</div>
+                {% for field in chain.supporting %}
+                <div style="font-size: 0.75rem; padding-left: 0.5rem;">
+                    &bull; {{ field.field_name }} = <strong>{{ field.normalized_value or field.raw_value }}</strong>
+                    <span style="color: var(--muted);">
+                        ({{ field.source.document_type.value }} · {{ field.source.extraction_method.value }})
+                    </span>
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% endif %}
     </div>
 

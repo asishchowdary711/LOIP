@@ -1,4 +1,4 @@
-"""Jinja2 template-rendered UI routes for human review."""
+"""Jinja2 template-rendered UI routes for the review console."""
 
 import os
 
@@ -12,6 +12,7 @@ from loip.domains.human_review.schemas import (
     OverrideRequest,
     ReviewQueueFilters,
 )
+from loip.schemas.decision import Decision
 from loip.web.routes.audit import _explainability_store
 from loip.web.routes.review import review_processor
 
@@ -21,13 +22,74 @@ templates = Jinja2Templates(
 )
 
 
+def _inr(value: float | int | None) -> str:
+    """Format a number with thousands separators (Jinja's `format` filter is
+    %-style and can't do `{:,.0f}`)."""
+    if value is None:
+        return "-"
+    return f"{value:,.0f}"
+
+
+templates.env.filters["inr"] = _inr
+
+
+def _collect_evidence_chains(decision) -> list:
+    """Flatten evidence chains from the decision and all sub-results."""
+    if decision is None:
+        return []
+    chains = list(decision.evidence_chains)
+    for result in (
+        decision.identity_result,
+        decision.income_result,
+        decision.affordability_result,
+    ):
+        if result is not None:
+            chains.extend(result.evidence_chains)
+    return chains
+
+
+@router.get("", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    cases = review_processor.get_queue(
+        ReviewQueueFilters(sort_by="risk_score", sort_order="desc", page_size=100)
+    )
+    summary = review_processor.get_queue_summary()
+
+    by_decision = {Decision.APPROVE: 0, Decision.REVIEW: 0, Decision.REJECT: 0}
+    foirs, cibils, risks = [], [], []
+    for case in cases:
+        by_decision[case.system_decision] = by_decision.get(case.system_decision, 0) + 1
+        if case.foir is not None:
+            foirs.append(case.foir)
+        if case.cibil_score is not None:
+            cibils.append(case.cibil_score)
+        if case.risk_score is not None:
+            risks.append(case.risk_score)
+
+    stats = {
+        "total": len(cases),
+        "approve": by_decision.get(Decision.APPROVE, 0),
+        "review": by_decision.get(Decision.REVIEW, 0),
+        "reject": by_decision.get(Decision.REJECT, 0),
+        "avg_foir": (sum(foirs) / len(foirs)) if foirs else 0.0,
+        "avg_cibil": (sum(cibils) / len(cibils)) if cibils else 0.0,
+        "avg_risk": (sum(risks) / len(risks)) if risks else 0.0,
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={"stats": stats, "summary": summary, "cases": cases, "active_page": "dashboard"},
+    )
+
+
 @router.get("/queue", response_class=HTMLResponse)
 async def queue_page(request: Request):
     cases = review_processor.get_queue(ReviewQueueFilters(sort_by="risk_score", sort_order="desc"))
     summary = review_processor.get_queue_summary()
     return templates.TemplateResponse(
-        "queue.html",
-        {"request": request, "cases": cases, "summary": summary, "active_page": "queue"},
+        request=request,
+        name="queue.html",
+        context={"request": request, "cases": cases, "summary": summary, "active_page": "queue"},
     )
 
 
@@ -39,14 +101,17 @@ async def review_detail_page(request: Request, case_id: str):
 
     decision = case.onboarding_decision
     explainability = _explainability_store.get(case.application_id)
+    evidence_chains = _collect_evidence_chains(decision)
 
     return templates.TemplateResponse(
-        "review_detail.html",
-        {
+        request=request,
+        name="review_detail.html",
+        context={
             "request": request,
             "case": case,
             "decision": decision,
             "explainability": explainability,
+            "evidence_chains": evidence_chains,
             "active_page": "review",
         },
     )

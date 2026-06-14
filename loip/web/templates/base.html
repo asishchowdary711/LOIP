@@ -67,7 +67,9 @@
         <div class="container">
             <h1>LOIP Review Console</h1>
             <nav>
+                <a href="/ui" class="{% if active_page == 'dashboard' %}active{% endif %}">Dashboard</a>
                 <a href="/ui/queue" class="{% if active_page == 'queue' %}active{% endif %}">Queue</a>
+                <a href="/docs">API Docs</a>
                 <a href="/health">API Health</a>
             </nav>
         </div>

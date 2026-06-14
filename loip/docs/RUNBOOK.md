@@ -4,10 +4,30 @@ Operational notes for running and troubleshooting LOIP locally.
 
 ## Starting the API
 
+Launch from the **repo root** (`/workspaces/LOIP`), not from `loip/`, and
+load the app as `loip.web.api:app`:
+
 ```bash
-cd loip
-PYTHONPATH=. .venv/bin/uvicorn loip.web.api:app --reload
+cd /workspaces/LOIP
+PYTHONPATH=/workspaces/LOIP loip/.venv/bin/uvicorn loip.web.api:app --host 0.0.0.0 --port 8000
 ```
+
+> **Why the full module path matters:** `loip/web/api.py` uses relative
+> imports (`from .routes import ...`) while the pipeline imports
+> `loip.web.routes.audit` absolutely. If the app is loaded as `web.api`
+> instead of `loip.web.api`, those resolve to two *different* module objects
+> with separate `review_processor` / explainability singletons, so the
+> review queue shows up empty. Always load `loip.web.api`.
+
+On startup the app seeds 7 demo review cases (`loip/web/startup.py`,
+mock-mode) so the review console has data immediately. Open:
+
+- `http://localhost:8000/ui` — dashboard (decision mix, avg FOIR/CIBIL)
+- `http://localhost:8000/ui/queue` — review queue
+- `http://localhost:8000/docs` — Swagger API explorer
+
+In Codespaces, use the forwarded port URL (Ports tab) instead of
+`localhost`.
 
 ## Health checks
 
