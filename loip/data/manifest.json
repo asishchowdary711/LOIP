@@ -23,10 +23,13 @@
     },
     {
       "name": "RVL-CDIP",
-      "role": "LayoutLMv3 backbone pre-training (generic layout features), NOT an Indian classifier",
-      "status": "deferred",
+      "role": "LayoutLMv3 backbone fine-tuning smoke sample (generic layout features), NOT an Indian classifier",
+      "status": "downloaded_partial",
+      "path": "loip/data/rvl_cdip_subset",
       "checksum_verified": false,
-      "reason": "~38GB and HuggingFace-gated. Backbone weights are pulled from HF on Phase B activation instead; the raw dataset is not needed locally."
+      "total_images": 320,
+      "per_class_target": 20,
+      "reason": "Full archive is ~38.7GB (not gated, but exceeds free disk); datasets>=5.0 can't stream it via load_dataset (legacy loading script unsupported). Instead, scripts/download_rvlcdip_subset.py streams the tar.gz directly and extracts a class-balanced 320-image (38.6MB) smoke sample. See docs/DATA_GUIDANCE_NOTES.md."
     },
     {
       "name": "FUNSD",

@@ -51,6 +51,8 @@ class OnboardingDecision(BaseModel):
     reason_codes: list[ReasonCode] = Field(default_factory=list)
     risk_score: float | None = Field(default=None, ge=0.0, le=1.0, description="XGBoost ensemble score")
     review_flags: list[str] = Field(default_factory=list)
+    disbursal_blocked: bool = Field(default=False, description="True when an otherwise-approvable loan cannot be disbursed yet (e.g. V-CIP pending per RBI)")
+    disbursal_block_reason: str | None = Field(default=None, description="Why disbursal is held, e.g. 'vcip_required_not_completed'")
     identity_result: IdentityVerificationResult
     income_result: IncomeResult
     affordability_result: AffordabilityResult

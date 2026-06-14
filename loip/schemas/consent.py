@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 class ConsentPurpose(StrEnum):
     KYC_VERIFICATION = "kyc_verification"
+    VIDEO_KYC = "video_kyc"
     CREDIT_BUREAU_PULL = "credit_bureau_pull"
     INCOME_VERIFICATION = "income_verification"
     DOCUMENT_PROCESSING = "document_processing"
