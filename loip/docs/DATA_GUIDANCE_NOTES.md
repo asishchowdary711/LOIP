@@ -4,6 +4,32 @@ Explicit notes on dataset sourcing decisions, domain mismatches, and the
 annotation pipeline rationale — so future contributors don't re-attempt
 downloads or runs that were deliberately deferred or cancelled.
 
+## Regenerating loip/data/ in a new environment (e.g. Codespaces)
+
+`loip/data/` is mostly **not tracked in git** — the full annotation corpus
+(222MB, 10,500 docs) and FUNSD download (29MB) could not be pushed from the
+original development machine's connection (~30-60KB/s, hits GitHub's push
+timeout above ~2MB). Only `data/manifest.json`, `data/training/`, and
+`data/annotation_sample25/` (the 25-doc input set) are tracked.
+
+To restore the rest in a fresh clone with normal bandwidth:
+
+```bash
+cd loip
+# FUNSD + archives (~46MB)
+.venv/bin/python scripts/download_datasets.py
+
+# Full 10,500-doc synthetic annotation corpus (~222MB; takes a few minutes)
+.venv/bin/python scripts/generate_corpus.py
+
+# Re-annotate the 25-doc sample (requires .venv-ocr, see SETUP.md) -> data/annotation_sample25_out/
+PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True .venv-ocr/bin/python -m scripts.annotate.generate_annotations \
+    -i data/annotation_sample25/<doc_type> -o data/annotation_sample25_out/<doc_type>
+```
+
+MIDV-500/2020, RVL-CDIP, and DocVQA remain out of scope as described below
+regardless of bandwidth (404'd URLs, disk size, or auth requirements).
+
 ## MIDV-500 / MIDV-2020 — not downloaded
 
 `scripts/download_datasets.py`'s URLs

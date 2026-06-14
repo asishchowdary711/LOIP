@@ -31,6 +31,14 @@ env/
 Thumbs.db
 
 # Data & models (large files)
+# Most of loip/data/ is regenerable: run scripts/generate_corpus.py for the
+# 10,500-doc annotation corpus and scripts/download_datasets.py for FUNSD/
+# archives (both too large to push from a slow connection). Only small
+# reference assets (manifest, training fixtures, 25-doc sample) are tracked.
+loip/data/*
+!loip/data/manifest.json
+!loip/data/training
+!loip/data/annotation_sample25
 loip/output/
 loip/logs/
 *.h5
