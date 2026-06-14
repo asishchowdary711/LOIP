@@ -1,0 +1,18 @@
+[
+  {
+    "name": "MIDV-500",
+    "role": "OCR robustness testing only \u2014 European/Russian IDs, NOT Indian doc training",
+    "status": "download_failed",
+    "path": "loip/data/midv_500",
+    "checksum_verified": false,
+    "error": "All URLs failed for MIDV-500"
+  },
+  {
+    "name": "MIDV-2020",
+    "role": "OCR robustness testing \u2014 extended lighting/angle variations",
+    "status": "download_failed",
+    "path": "loip/data/midv_2020",
+    "checksum_verified": false,
+    "error": "All URLs failed for MIDV-2020"
+  }
+]

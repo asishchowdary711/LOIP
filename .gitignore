@@ -31,7 +31,6 @@ env/
 Thumbs.db
 
 # Data & models (large files)
-loip/data/
 loip/output/
 loip/logs/
 *.h5
