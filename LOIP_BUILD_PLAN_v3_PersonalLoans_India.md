@@ -265,6 +265,13 @@ Steps:
 | ITR | 500 | 250 | 750 |
 | **Total** | **7,000** | **3,500** | **10,500** |
 
+> **⚠️ Scope update (accepted):** the full **10,500-doc corpus is NOT required**.
+> A **25-document mixed sample** (`loip/data/annotation_sample25/`, ~80.5% avg
+> field-match across all 6 doc types) is the agreed annotation set and is
+> sufficient to validate the annotation pipeline end-to-end. The volume targets
+> above are retained for reference only. See `loip/docs/DATA_GUIDANCE_NOTES.md`
+> and `loip/data/manifest.json`.
+
 ### 5.5 Phase 0 Deliverables
 
 - `docker-compose.yml` with all services + India-region configuration note

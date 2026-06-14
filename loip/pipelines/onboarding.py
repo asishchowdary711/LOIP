@@ -24,7 +24,15 @@ class OnboardingPipeline(BasePipeline):
         self.cibil_client = CIBILClient()
         self.cibil_client._mock = mock_mode
 
-    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict, raw_documents: list[bytes] | None = None, document_store=None) -> OnboardingDecision:
+    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict, raw_documents: list[bytes] | None = None, document_store=None, event_publisher=None) -> OnboardingDecision:
+        from loip.events import Topic
+
+        app_id = application.application_id
+
+        async def emit(topic: str, payload: dict) -> None:
+            if event_publisher is not None:
+                await event_publisher.publish(topic, key=app_id, payload={"application_id": app_id, **payload})
+
         # PDF-rendered document classes vs. image-based ones (for storage ext).
         pdf_doc_classes = {"salary_slip", "bank_statement", "itr", "form16", "gst_return"}
         extracted_data = {}
@@ -43,6 +51,8 @@ class OnboardingPipeline(BasePipeline):
                 ext = "pdf" if doc_class in pdf_doc_classes else "png"
                 document_ids[doc_class] = document_store.store(doc_class, raw_documents[i], ext=ext)
 
+        await emit(Topic.DOCUMENT_CLASSIFIED, {"document_classes": list(extracted_data.keys())})
+
         selfie_img = images[-1] if len(images) > 1 else None
         doc_face_img = images[0] if images else None
 
@@ -53,6 +63,10 @@ class OnboardingPipeline(BasePipeline):
             selfie_img=selfie_img,
             doc_face_img=doc_face_img
         )
+        await emit(Topic.IDENTITY_VERIFIED, {
+            "identity_confidence": identity_result.identity_confidence,
+            "tamper_flags": list(identity_result.tamper_flags),
+        })
 
         income_result = self.income_processor.process_income(
             application.application_id,
@@ -61,6 +75,10 @@ class OnboardingPipeline(BasePipeline):
             application_employer_name=application.employer_name,
             document_ids=document_ids,
         )
+        await emit(Topic.INCOME_RECONCILED, {
+            "verified_monthly_income": income_result.verified_monthly_income,
+            "income_confidence": income_result.income_confidence,
+        })
 
         affordability_result = self.affordability_processor.process_affordability(
             application.application_id,
@@ -68,6 +86,10 @@ class OnboardingPipeline(BasePipeline):
             application.model_dump(),
             extracted_data
         )
+        await emit(Topic.AFFORDABILITY_COMPUTED, {
+            "foir": affordability_result.foir,
+            "disposable_income": affordability_result.disposable_income,
+        })
 
         bureau_result = await self.cibil_client.fetch_report(
             pan=extracted_data.get("pan", {}).get("pan_number", ""),
@@ -76,6 +98,7 @@ class OnboardingPipeline(BasePipeline):
             application_id=application.application_id,
             consent_verified=True
         )
+        await emit(Topic.CONSENT_CAPTURED, {"purpose": "credit_bureau_pull", "cibil_score": bureau_result.score})
 
         fraud_result = self.fraud_processor.process_fraud(
             application.application_id,
@@ -83,6 +106,7 @@ class OnboardingPipeline(BasePipeline):
             extracted_data,
             application_data
         )
+        await emit(Topic.FRAUD_SCORED, {"fraud_score": fraud_result.fraud_score})
 
         decision = self.decision_processor.decide(
             application,
@@ -126,7 +150,14 @@ class OnboardingPipeline(BasePipeline):
         from loip.web.routes.audit import store_explainability
         store_explainability(application.application_id, explainability_result)
 
+        await emit(Topic.RISK_DECIDED, {
+            "decision": decision.decision.value,
+            "risk_score": decision.risk_score,
+            "reason_codes": [rc.code for rc in decision.reason_codes],
+        })
+
         if decision.decision.value in ("review", "reject"):
             self.review_processor.create_review_case(decision)
+            await emit(Topic.REVIEW_ASSIGNED, {"decision": decision.decision.value})
 
         return decision

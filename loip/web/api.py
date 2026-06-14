@@ -15,13 +15,25 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from loip.events import EventPublisher
+
     from .startup import bootstrap_review_console
 
+    # Shared Kafka publisher (best-effort; no-ops if the broker is down).
+    publisher = EventPublisher()
+    await publisher.start()
+    app.state.event_publisher = publisher
+    from .routes import onboard as onboard_routes
+    onboard_routes.event_publisher = publisher
+
     try:
-        await bootstrap_review_console()
+        await bootstrap_review_console(event_publisher=publisher)
     except Exception:
         logger.exception("Review console bootstrap failed; it will start empty")
+
     yield
+
+    await publisher.stop()
 
 
 app = FastAPI(title="LOIP API", version="1.0.0", lifespan=lifespan)
@@ -66,15 +78,17 @@ async def readiness_check():
     except Exception:  # noqa: BLE001
         minio_ok = False
 
-    # Wired and health-checked today: Postgres + MinIO. The rest are defined in
-    # docker-compose.yml but not yet in the request path (reported as None).
+    kafka_ok = getattr(getattr(app.state, "event_publisher", None), "ready", False)
+
+    # Wired and health-checked today: Postgres + MinIO + Kafka. The rest are
+    # defined in docker-compose.yml but not yet in the request path (None).
     deps = {
         "postgresql": postgres_ok,
         "minio": minio_ok,
+        "kafka": kafka_ok,
         "redis": None,
         "opensearch": None,
         "neo4j": None,
-        "kafka": None,
     }
     wired_ok = postgres_ok and minio_ok
     return {"status": "ready" if wired_ok else "degraded", "dependencies": deps}

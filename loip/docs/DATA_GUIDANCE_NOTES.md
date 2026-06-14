@@ -4,6 +4,18 @@ Explicit notes on dataset sourcing decisions, domain mismatches, and the
 annotation pipeline rationale — so future contributors don't re-attempt
 downloads or runs that were deliberately deferred or cancelled.
 
+## ✅ Scope decision — 25-doc annotation sample is sufficient (10,500 NOT required)
+
+**Accepted by stakeholder:** the full 10,500-document annotation corpus from
+build-plan §5.4 is **not required**. The **25-document mixed sample**
+(`data/annotation_sample25/`, ~80.5% average field-match rate across all 6
+document types) is the agreed annotation set for this project. Do not
+re-attempt the full-corpus annotation run. Any future model fine-tuning should
+use the 25-doc sample (or generate a small additional batch if needed), and the
+§10 annotation gates are treated as calibration/smoke checks against this
+sample, not production gates against the (not-required) full corpus. The
+machine-readable record of this decision is in `data/manifest.json`.
+
 ## Regenerating loip/data/ in a new environment (e.g. Codespaces)
 
 `loip/data/` is mostly **not tracked in git** — the full annotation corpus

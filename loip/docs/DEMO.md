@@ -72,8 +72,10 @@ URL from the **Ports** tab.
 - **Persistence (optional flourish):** restart the server and reopen
   `/ui/queue` — the queue, decisions, evidence, and your override are still
   there. State lives in Postgres (`docker compose ps`), documents in MinIO
-  (console at http://localhost:9001), and `GET /health/ready` shows both
-  connected.
+  (console at http://localhost:9001). Each domain step also publishes a Kafka
+  event; tail one with
+  `docker exec loip-kafka-1 kafka-console-consumer --bootstrap-server localhost:29092 --topic risk.decided --from-beginning`.
+  `GET /health/ready` shows Postgres + MinIO + Kafka connected.
 
 ## 6. Show the API (2 min)
 

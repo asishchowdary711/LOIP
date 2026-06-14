@@ -1,18 +1,47 @@
-[
-  {
-    "name": "MIDV-500",
-    "role": "OCR robustness testing only \u2014 European/Russian IDs, NOT Indian doc training",
-    "status": "download_failed",
-    "path": "loip/data/midv_500",
-    "checksum_verified": false,
-    "error": "All URLs failed for MIDV-500"
+{
+  "annotation_corpus": {
+    "decision": "ACCEPTED: 25-doc sample is sufficient; the full 10,500-doc corpus (build-plan §5.4) is NOT required",
+    "sample_path": "loip/data/annotation_sample25",
+    "sample_size": 25,
+    "avg_field_match_rate": 0.805,
+    "rationale": "Full-corpus annotation was multi-day single-process; the 25-doc mixed sample validates the LayoutLMv3/Donut pipeline end-to-end across all 6 document types. See docs/DATA_GUIDANCE_NOTES.md."
   },
-  {
-    "name": "MIDV-2020",
-    "role": "OCR robustness testing \u2014 extended lighting/angle variations",
-    "status": "download_failed",
-    "path": "loip/data/midv_2020",
-    "checksum_verified": false,
-    "error": "All URLs failed for MIDV-2020"
-  }
-]
+  "external_datasets": [
+    {
+      "name": "MIDV-500",
+      "role": "OCR robustness testing only — European/Russian IDs, NOT Indian document training",
+      "status": "deferred",
+      "checksum_verified": false,
+      "reason": "Distribution URLs 404; real set is 50+ per-type FTP zips (~32GB). Out of scope per build plan (OCR-robustness only; deferred with the Phase B OCR models)."
+    },
+    {
+      "name": "MIDV-2020",
+      "role": "OCR robustness testing — extended lighting/angle variations",
+      "status": "deferred",
+      "checksum_verified": false,
+      "reason": "Same as MIDV-500: 404 URLs, large FTP-only distribution, OCR-robustness use only."
+    },
+    {
+      "name": "RVL-CDIP",
+      "role": "LayoutLMv3 backbone pre-training (generic layout features), NOT an Indian classifier",
+      "status": "deferred",
+      "checksum_verified": false,
+      "reason": "~38GB and HuggingFace-gated. Backbone weights are pulled from HF on Phase B activation instead; the raw dataset is not needed locally."
+    },
+    {
+      "name": "FUNSD",
+      "role": "Donut backbone pre-training (form key-value structure)",
+      "status": "downloaded",
+      "path": "loip/data/funsd",
+      "checksum_verified": true,
+      "reason": "Small (~17MB); fetched via scripts/download_datasets.py."
+    },
+    {
+      "name": "DocVQA",
+      "role": "Qwen2.5-VL ANLS>=0.75 validation benchmark (not training)",
+      "status": "deferred",
+      "checksum_verified": false,
+      "reason": "Source (rrc.cvc.uab.es) requires a registered account. ANLS scoring math is unit-tested; the live gate runs once weights + a held-out QA set are available."
+    }
+  ]
+}

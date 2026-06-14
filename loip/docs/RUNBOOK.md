@@ -77,6 +77,34 @@ external API integrations (UIDAI/NSDL/CIBIL/Experian/DigiLocker) return
 deterministic mock responses — no network calls are made and no credentials
 are required.
 
+## Kafka domain-event pipeline
+
+As the onboarding pipeline runs, each domain emits an event
+(`loip/events.py`, `EventPublisher`) to its Kafka topic:
+
+| Topic | Emitted after |
+|---|---|
+| `document.classified` | document classification |
+| `identity.verified` | identity trust checks |
+| `income.reconciled` | income reconstruction |
+| `affordability.computed` | FOIR/affordability |
+| `consent.captured` | bureau pull (consent gate) |
+| `fraud.scored` | fraud intelligence |
+| `risk.decided` | final decision |
+| `review.assigned` | a review/reject routed to the queue |
+
+The publisher is started in the FastAPI lifespan and shared by `/onboard` and
+the demo seeder. Publishing is **best-effort** — if Kafka is unreachable it
+logs a warning and no-ops, so the app still works without the broker.
+`GET /health/ready` reports `kafka: true/false`.
+
+Inspect events from the broker:
+
+```bash
+docker exec loip-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:29092 --topic risk.decided --from-beginning
+```
+
 ## MLOps: drift alerts and retraining
 
 `MLOpsProcessor` (in-memory in mock mode) tracks model registrations, drift

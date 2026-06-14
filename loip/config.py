@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # --- PostgreSQL ---
     database_url: str = "postgresql+asyncpg://loip:changeme@localhost:5432/loip"
 
+    # --- Kafka (async domain event pipeline) ---
+    kafka_bootstrap_servers: str = "localhost:9092"
+
     # --- Data residency (RBI localization) ---
     data_region: str = "ap-south-1"
     enforce_data_residency: bool = True

@@ -26,6 +26,9 @@ except Exception as exc:  # noqa: BLE001 - degrade gracefully if MinIO is down
     document_store = None
     logger.warning("MinIO document store unavailable (%s); documents will not be persisted", exc)
 
+# Set by the app lifespan (loip/web/api.py) once the Kafka producer is started.
+event_publisher = None
+
 
 @router.post("", response_model=OnboardingDecision)
 @limiter.limit("10/minute")
@@ -58,6 +61,7 @@ async def onboard_application(
             loan_app, images, app_data,
             raw_documents=raw_documents,
             document_store=document_store,
+            event_publisher=event_publisher,
         )
         return decision
     except Exception as e:
