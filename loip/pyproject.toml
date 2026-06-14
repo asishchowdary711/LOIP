@@ -54,9 +54,19 @@ dependencies = [
 
     # Security scanning
     "bandit>=1.7",
+    "pip-audit>=2.7",
+    "safety>=3.2",
 ]
 
 [project.optional-dependencies]
+tabular-ml = [
+    # Phase 1 tabular/graph ML wrappers (XGBoost, LightGBM, GraphSAGE) — lightweight,
+    # no torch/transformers required. Install into .venv-ml (Python 3.11).
+    "xgboost>=2.1",
+    "lightgbm>=4.4",
+    "scikit-learn>=1.5",
+    "networkx>=3.4",
+]
 ml = [
     # ML / model serving
     "xgboost>=2.1",

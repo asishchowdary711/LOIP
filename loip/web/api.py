@@ -1,9 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
-from .routes import audit, consent, onboard, review, ui
+from .auth import limiter
+from .routes import admin, audit, consent, evidence, onboard, review, ui
 
 app = FastAPI(title="LOIP API", version="1.0.0")
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,6 +24,8 @@ app.add_middleware(
 app.include_router(onboard.router)
 app.include_router(review.router)
 app.include_router(audit.router)
+app.include_router(evidence.router)
+app.include_router(admin.router)
 app.include_router(ui.router)
 app.include_router(consent.router)
 

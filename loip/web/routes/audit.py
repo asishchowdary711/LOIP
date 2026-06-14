@@ -22,27 +22,6 @@ async def get_explainability(application_id: str):
     return result
 
 
-@router.get("/{application_id}/evidence-chains")
-async def get_evidence_chains(application_id: str):
-    from loip.web.routes.review import review_processor
-
-    case = review_processor.get_case_by_application(application_id)
-    if case is None or case.onboarding_decision is None:
-        raise HTTPException(status_code=404, detail=f"No decision data for application {application_id}")
-
-    decision = case.onboarding_decision
-    chains = []
-    chains.extend([c.model_dump() for c in decision.evidence_chains])
-    if decision.identity_result:
-        chains.extend([c.model_dump() for c in decision.identity_result.evidence_chains])
-    if decision.income_result:
-        chains.extend([c.model_dump() for c in decision.income_result.evidence_chains])
-    if decision.affordability_result:
-        chains.extend([c.model_dump() for c in decision.affordability_result.evidence_chains])
-
-    return {"application_id": application_id, "evidence_chains": chains}
-
-
 @router.get("/{application_id}/retraining-data")
 async def get_retraining_data(application_id: str | None = None):
     from loip.web.routes.review import review_processor

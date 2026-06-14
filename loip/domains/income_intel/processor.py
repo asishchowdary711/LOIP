@@ -148,6 +148,6 @@ class IncomeIntelligenceProcessor:
             "salary_slip_amount": salary_slip_amount,
             "bank_credit_amount": bank_credit_amount,
             "anomalies": len(result.anomaly_flags)
-        })
+        }, task="income_confidence")
 
         return result

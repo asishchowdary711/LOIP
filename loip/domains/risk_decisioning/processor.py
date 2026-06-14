@@ -111,7 +111,7 @@ class RiskDecisionProcessor:
             "cashflow_stability": affordability.cashflow_stability,
             "employment_tier": application.employment_tier,
             "loan_to_income_ratio": application.loan_amount / max(1, (income.verified_monthly_income * 12))
-        })
+        }, task="risk_score")
         
         if score >= 0.70:
             return self._approve(application, identity, income, affordability, bureau, score)

@@ -42,6 +42,28 @@ class ComplianceProcessor:
         self._kfs_store: dict[str, KeyFactStatement] = {}
         self._cooling_off_store: dict[str, CoolingOffRecord] = {}
         self._deletion_log: list[DataDeletionRequest] = []
+        self._analyzer = None
+        self._anonymizer = None
+
+        if not self.mock_mode:
+            try:
+                from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer  # type: ignore[import-not-found]
+                from presidio_anonymizer import AnonymizerEngine  # type: ignore[import-not-found]
+
+                analyzer = AnalyzerEngine()
+                analyzer.registry.add_recognizer(PatternRecognizer(
+                    supported_entity="PAN_NUMBER",
+                    patterns=[Pattern(name="pan_pattern", regex=PAN_PATTERN.pattern, score=0.85)],
+                ))
+                analyzer.registry.add_recognizer(PatternRecognizer(
+                    supported_entity="AADHAAR_NUMBER",
+                    patterns=[Pattern(name="aadhaar_pattern", regex=AADHAAR_PATTERN.pattern, score=0.85)],
+                ))
+                self._analyzer = analyzer
+                self._anonymizer = AnonymizerEngine()
+            except Exception:
+                logger.warning("Presidio unavailable, falling back to regex-based PII masking", exc_info=True)
+                self.mock_mode = True
 
     # --- DPDP Consent Management ---
 
@@ -259,6 +281,9 @@ class ComplianceProcessor:
         return value
 
     def mask_pii_in_text(self, text: str) -> tuple[str, PIIMaskingResult]:
+        if not self.mock_mode and self._analyzer is not None and self._anonymizer is not None:
+            return self._mask_pii_with_presidio(text)
+
         entities: list[str] = []
         masked = text
         count = 0
@@ -289,6 +314,32 @@ class ComplianceProcessor:
             entities_detected=list(set(entities)),
         )
         return masked, result
+
+    def _mask_pii_with_presidio(self, text: str) -> tuple[str, PIIMaskingResult]:
+        from presidio_anonymizer.entities import OperatorConfig  # type: ignore[import-not-found]
+
+        analyzer_results = self._analyzer.analyze(
+            text=text,
+            language="en",
+            entities=["PAN_NUMBER", "AADHAAR_NUMBER", "PHONE_NUMBER", "EMAIL_ADDRESS", "PERSON", "LOCATION"],
+        )
+        operators = {
+            "PAN_NUMBER": OperatorConfig("custom", {"lambda": self.mask_pan}),
+            "AADHAAR_NUMBER": OperatorConfig("custom", {"lambda": self.mask_aadhaar}),
+            "PHONE_NUMBER": OperatorConfig("custom", {"lambda": self.mask_phone}),
+            "EMAIL_ADDRESS": OperatorConfig("custom", {"lambda": self.mask_email}),
+            "DEFAULT": OperatorConfig("replace", {"new_value": "<REDACTED>"}),
+        }
+        anonymized = self._anonymizer.anonymize(
+            text=text, analyzer_results=analyzer_results, operators=operators
+        )
+        entity_types = sorted({r.entity_type for r in analyzer_results})
+        result = PIIMaskingResult(
+            original_field_count=len(analyzer_results),
+            masked_field_count=len(analyzer_results),
+            entities_detected=entity_types,
+        )
+        return anonymized.text, result
 
     # --- Data Residency ---
 

@@ -5,8 +5,10 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Header, Request
+from fastapi import Depends, Header, HTTPException, Request
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 
 class Role(StrEnum):
@@ -19,7 +21,7 @@ class Role(StrEnum):
 
 
 ROLE_PERMISSIONS: dict[Role, set[str]] = {
-    Role.ADMIN: {"*"},
+    Role.ADMIN: {"*", "admin:read", "admin:write"},
     Role.MANAGER: {
         "onboard:read", "onboard:write",
         "review:read", "review:write", "review:override",
@@ -86,3 +88,11 @@ def require_permission(permission: str):
             )
         return user
     return checker
+
+
+def rate_limit_key(request: Request) -> str:
+    api_key = request.headers.get("x-api-key")
+    return api_key if api_key else get_remote_address(request)
+
+
+limiter = Limiter(key_func=rate_limit_key, default_limits=["100/minute"])

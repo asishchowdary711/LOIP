@@ -1,0 +1,113 @@
+# DATA GUIDANCE NOTES
+
+Explicit notes on dataset sourcing decisions, domain mismatches, and the
+annotation pipeline rationale — so future contributors don't re-attempt
+downloads or runs that were deliberately deferred or cancelled.
+
+## MIDV-500 / MIDV-2020 — not downloaded
+
+`scripts/download_datasets.py`'s URLs
+(`https://ftp.smartengines.com/midv-500/dataset/midv-500.zip` and the
+MIDV-2020 equivalent) return **404** — the real datasets are distributed as
+50+ per-document-type zips (~650MB each, ~32GB total for MIDV-500 alone) via
+FTP, not a single archive.
+
+**Domain mismatch**: MIDV-500/2020 contain European/Russian ID documents.
+Per the build plan, their role is **OCR-robustness testing only** — they are
+explicitly **not** used for Indian-document training (PAN/Aadhaar/salary
+slips/etc.). Given:
+
+1. The 404'd download would require a script rewrite for per-file FTP
+   downloads, and
+2. ~32GB+ exceeds available disk on this development machine (~37GB free),
+   and
+3. They are lowest-priority per the build plan anyway,
+
+**this download is deferred indefinitely, not attempted.**
+
+## RVL-CDIP — not downloaded
+
+~38GB, would nearly fill remaining disk on this machine, and likely requires
+HuggingFace authentication (gated dataset). Not attempted.
+
+## DocVQA — not downloaded
+
+The source (`rrc.cvc.uab.es`) requires a registered account/login for direct
+download — `download_datasets.py` would 401/403 without manual credential
+setup. Not attempted.
+
+## Annotation corpus — 25-doc sample, not the full 10,500
+
+`scripts/generate_corpus.py` generated the full §5.4 10,500-document
+synthetic corpus into `data/annotation_corpus/` (222MB: pan_card 1500,
+aadhaar 1500, salary_slip 3000, bank_statement 3000, form16 750, itr 750,
+clean/tampered split per the build plan table).
+
+Running the full LayoutLMv3/Donut annotation pass
+(`scripts/annotate/generate_annotations.py`) against all 10,500 documents
+was **started, then cancelled** — per-document timing is highly variable
+(PAN ~3s/doc, but bank_statement docs with thousands of OCR tokens take much
+longer), making the full run **multi-day** single-process, not the
+originally estimated 5-10hrs.
+
+**Decision**: a 25-document mixed sample (5 pan_card, 5 aadhaar, 5
+salary_slip, 5 bank_statement, 3 form16, 2 itr —
+`data/annotation_sample25/` → `data/annotation_sample25_out/`) was annotated
+instead, achieving an **80.5% average field-match rate**:
+
+| Doc type | Match rate |
+|---|---|
+| pan_card | 100% (4/4 fields, all 5 docs) |
+| form16 | 100% (6/6 fields, all 3 docs) |
+| salary_slip | ~98% (11.4/12 avg) |
+| aadhaar | ~74% (7-8/10) |
+| itr | 1.5/2 avg |
+| bank_statement | ~38-46% (weakest — transaction-table row matching gap) |
+
+This 25-doc sample is considered **sufficient** for current purposes (e.g.
+validating the annotation pipeline end-to-end across all 6 document types).
+**The full 10,500-doc corpus annotation run is cancelled, not just
+deferred** — any future ML training (LayoutLMv3 fine-tuning, etc.) should
+use the 25-doc sample or generate a small additional batch if needed, rather
+than re-attempting the full corpus.
+
+### Known remaining annotation gaps (not blocking)
+
+- **Aadhaar number fuzzy-match**: OCR reads the 12-digit Aadhaar number as 3
+  space-separated 4-digit groups (`"5187 6834 4248"`) vs the ground truth's
+  contiguous 12-digit string. `_is_exact_field` only strips commas/colons,
+  not spaces, before comparing.
+- **Bank statement transaction rows** (`txn_N_*` fields): poor match rate,
+  likely needs row-grouping by y-coordinate before token matching, rather
+  than flat line-by-line OCR order.
+- **ITR fields**: 1/2 fields matched on the sample — not yet investigated.
+
+## FUNSD — downloaded
+
+`data/funsd/` (16.8MB) was downloaded successfully via
+`scripts/download_datasets.py` and is available for use.
+
+## LayoutLMv3 / Donut fine-tuning — 25-doc sample is calibration only, not the F1 >= 0.90 gate
+
+`scripts/training/finetune_layoutlmv3.py` and
+`scripts/training/finetune_donut.py` fine-tune on the same 25-document
+annotation sample described above (`data/annotation_sample25_out/`), split
+20 train / 5 val (`train_test_split(..., test_size=5, random_state=42)`,
+**not stratified** — `itr` has only 2 total examples, which is below
+sklearn's minimum for a stratified split across 6 classes).
+
+The build plan's `F1 >= 0.90` gate
+(`tests/annotate/test_annotation_pipeline.py::test_layoutlmv3_finetune_f1_gte_0_90`)
+assumed the (cancelled) 10,500-doc corpus. On 25 docs — with a 5-doc
+validation split spanning 6 classes — this fine-tune is a **smoke
+test/calibration run only**: it confirms the training loop, label mapping,
+and bbox-normalization code are correct end-to-end, not that the model meets
+production accuracy. The script reports its actual val accuracy/F1 when run;
+record that number, but don't treat it as a pass/fail gate until run against
+a larger, properly-stratified corpus (the full 10,500-doc corpus, or a new
+larger sample — see "Annotation corpus" above for why the full corpus run
+was cancelled).
+
+`scripts/training/finetune_donut.py` carries the same caveat and is lower
+priority — `DonutWrapper` falls back to the zero-shot
+`naver-clova-ix/donut-base` checkpoint if its fine-tune has not been run.

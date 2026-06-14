@@ -31,7 +31,7 @@ class FraudIntelligenceProcessor:
             "pan": extracted_data.get("pan", {}).get("pan_number", ""),
             "aadhaar": extracted_data.get("aadhaar", {}).get("aadhaar_number", "")
         }
-        graph_fraud_score = self.graphsage.predict_fraud(node_features, {})
+        graph_fraud_score = self.graphsage.predict_fraud(node_features, {"application_id": application_id})
         result.graph_fraud_score = graph_fraud_score
         
         if graph_fraud_score > 0.8:

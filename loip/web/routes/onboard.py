@@ -1,16 +1,19 @@
 import json
 import cv2
 import numpy as np
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException
 from pydantic import ValidationError
 from loip.schemas.decision import LoanApplication, OnboardingDecision
 from loip.pipelines.onboarding import OnboardingPipeline
+from loip.web.auth import limiter
 
 router = APIRouter(prefix="/onboard", tags=["Onboarding"])
 pipeline = OnboardingPipeline(mock_mode=True)
 
 @router.post("", response_model=OnboardingDecision)
+@limiter.limit("10/minute")
 async def onboard_application(
+    request: Request,
     application: str = Form(...),
     documents: list[UploadFile] = File(...)
 ):
