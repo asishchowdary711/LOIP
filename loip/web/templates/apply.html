@@ -96,6 +96,19 @@
   .decision .meta{margin-top:12px;font-size:.8rem;color:var(--faint)}
   .restart{margin-top:18px;background:transparent;border:1px solid var(--line);color:var(--text)}
   .restart:hover{background:var(--panel-2)}
+  .modebar{display:flex;align-items:center;gap:9px;padding:10px 32px;font-size:.82rem;
+    background:var(--panel-2);border-bottom:1px solid var(--line);color:var(--muted)}
+  .modebar .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:0 0 auto}
+  .modebar.real .dot{background:var(--accent)}
+  .modebar.real{color:var(--accent-2)}
+  .extracted{margin-top:12px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px}
+  .extracted .eh{font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:6px}
+  .extracted .er{display:flex;justify-content:space-between;font-size:.82rem;padding:3px 0}
+  .extracted .er .ek{color:var(--muted)}
+  .mismatch{background:#3a2f12;border:1px solid var(--warn);border-radius:8px;padding:9px 12px;
+    font-size:.82rem;margin-bottom:7px;color:#f3d9a8;text-align:left}
+  .statuslink{display:inline-block;margin-top:14px;color:var(--accent-2);font-size:.85rem;text-decoration:none;font-weight:600}
   @media(max-width:720px){.g2,.g3,.uploads,.chips{grid-template-columns:1fr}}
 </style>
 </head>
@@ -106,6 +119,8 @@
       <div class="ico"></div>
       <div><h1>Personal loan application</h1><p>AI-powered instant processing</p></div>
     </div>
+
+    <div class="modebar" id="modebar"><span class="dot"></span><span id="modetext">Checking processing mode…</span></div>
 
     <!-- ============ FORM VIEW ============ -->
     <div class="body" id="formView">
@@ -270,6 +285,7 @@ form.addEventListener('submit',async e=>{
   try{
     const res=await reqPromise;
     finalizeRows(rows,res);
+    renderExtracted(rows,res);
     showDecision(res);
   }catch(err){
     SLOTS.forEach(s=>{rows[s.key].classList.add('bad');
@@ -321,12 +337,36 @@ function showDecision(res){
   document.getElementById('decisionTitle').textContent=titles[d]||'Decision';
   document.getElementById('decisionText').textContent=texts[d]||'';
   const risk=res.risk_score!=null?` · Risk score ${(res.risk_score*100).toFixed(0)}/100`:'';
-  document.getElementById('decisionMeta').textContent=
-    `Application ${res.application_id}${risk} · saved to ${res.stored_at}`;
+  const mism=(res.mismatches||[]).map(m=>`<div class="mismatch">⚠ ${m}</div>`).join('');
+  document.getElementById('decisionMeta').innerHTML=
+    mism+`<div>Application <b>${res.application_id}</b>${risk}</div>`+
+    `<a class="statuslink" href="${res.status_url||('/apply/status/'+res.application_id)}">Track this application →</a>`;
 }
 
 document.getElementById('restartBtn').addEventListener('click',()=>location.reload());
 refresh();
+
+/* ---------- processing-mode banner ---------- */
+fetch('/apply/mode').then(r=>r.json()).then(m=>{
+  const bar=document.getElementById('modebar');
+  document.getElementById('modetext').textContent=m.mode_label;
+  if(m.real_models)bar.classList.add('real');
+}).catch(()=>{document.getElementById('modetext').textContent='Mock mode — simulated extraction';});
+
+/* ---------- extracted-field labels per document ---------- */
+const EFIELDS={pan:'PAN',aadhaar:'Aadhaar',salary_slip:'Salary slip',bank_statement:'Bank statement'};
+function renderExtracted(rows,res){
+  const ef=res.extracted_fields||{};
+  Object.keys(ef).forEach(cls=>{
+    const r=rows[cls];if(!r)return;
+    const fields=ef[cls];if(!fields||!Object.keys(fields).length)return;
+    const box=document.createElement('div');box.className='extracted';
+    box.innerHTML='<div class="eh">What we read from this document</div>'+
+      Object.entries(fields).slice(0,6).map(([k,v])=>
+        `<div class="er"><span class="ek">${k.replace(/_/g,' ')}</span><span>${v}</span></div>`).join('');
+    r.appendChild(box);
+  });
+}
 </script>
 </body>
 </html>

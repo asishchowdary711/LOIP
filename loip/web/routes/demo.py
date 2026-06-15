@@ -10,6 +10,7 @@ existing `/onboard` pipeline. Submissions are stored as local JSON files
 import json
 import logging
 import os
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 
@@ -20,9 +21,10 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from loip.schemas.decision import LoanApplication
+from loip.schemas.decision import Decision, LoanApplication
 from loip.web.auth import limiter
 from loip.web.routes import onboard as onboard_routes
+from loip.web.routes import review as review_routes
 
 logger = logging.getLogger(__name__)
 
@@ -44,47 +46,151 @@ def _storage_dir() -> str:
     return _DATA_DIR
 
 
-# Real-model toggle. By default the demo reuses the shared mock-mode pipeline
-# (deterministic, no weights, fast — right for CI and cheap demos). Set
-# LOIP_DEMO_REAL_MODELS=1 to genuinely read the UPLOADED DOCUMENTS with real
-# OCR / field-extraction / classification.
+# Real vs mock document models — auto-detected.
 #
-# We deliberately only make the document-intelligence stage real. A full
-# mock_mode=False pipeline would ALSO switch on the external bureau/identity
-# clients (CIBIL/UIDAI/NSDL/DigiLocker), which have no configured endpoints and
-# fail with "Request URL is missing an 'http://' protocol". Those stages stay
-# mocked; only document reading is real. Any document wrapper whose deps are
-# missing falls back to mock via its own ImportError guard (e.g. Qwen uses the
-# local Ollama backend). The pipeline is built lazily on first use and cached.
-_REAL_MODELS = os.getenv("LOIP_DEMO_REAL_MODELS", "0").lower() in ("1", "true", "yes")
+# The demo genuinely reads the UPLOADED DOCUMENTS (real OCR / field extraction /
+# classification) when a local Ollama server is reachable; otherwise it falls
+# back to the shared deterministic mock pipeline so the demo never breaks in
+# front of an audience. Set LOIP_DEMO_REAL_MODELS=0 to force mock regardless.
+#
+# Only the document-intelligence stage is made real. A full mock_mode=False
+# pipeline would also switch on the external bureau/identity clients
+# (CIBIL/UIDAI/NSDL/DigiLocker), which have no configured endpoints; those stay
+# mocked. The real pipeline is built lazily on first use and cached, and writes
+# review cases into the SAME ReviewProcessor the admin UI reads (review_routes).
+_OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 _real_pipeline = None
+_ollama_reachable: bool | None = None
 
 
-def _get_pipeline():
+def _real_models_active() -> bool:
+    """True when uploaded files should be read by real models. Auto-detects a
+    running Ollama server (cached after the first probe). LOIP_DEMO_REAL_MODELS=0
+    forces mock; any other value still requires Ollama to actually be up."""
+    global _ollama_reachable
+    env = os.getenv("LOIP_DEMO_REAL_MODELS", "").strip().lower()
+    if env in ("0", "false", "no"):
+        return False
+    if _ollama_reachable is None:
+        try:
+            with urllib.request.urlopen(f"{_OLLAMA_HOST}/api/tags", timeout=1.5) as resp:
+                _ollama_reachable = resp.status == 200
+        except Exception:  # noqa: BLE001 - any failure means "not reachable"
+            _ollama_reachable = False
+        logger.info(
+            "Demo document models: %s (Ollama %s at %s)",
+            "REAL" if _ollama_reachable else "MOCK",
+            "reachable" if _ollama_reachable else "unreachable",
+            _OLLAMA_HOST,
+        )
+    return _ollama_reachable
+
+
+def _mode_label(real: bool) -> str:
+    return "Real models — reading your documents" if real else "Mock mode — simulated extraction"
+
+
+def _get_pipeline(real_active: bool):
     """Return the pipeline backing the demo: the shared mock pipeline, or a
-    lazily-built one with real document intelligence when
-    LOIP_DEMO_REAL_MODELS is set."""
+    lazily-built one with real document intelligence when Ollama is reachable."""
     global _real_pipeline
-    if not _REAL_MODELS:
+    if not real_active:
         return onboard_routes.pipeline
     if _real_pipeline is None:
         from loip.domains.document_intel.processor import DocumentIntelligenceProcessor
         from loip.pipelines.onboarding import OnboardingPipeline
 
-        logger.info(
-            "LOIP_DEMO_REAL_MODELS set — real document intelligence, mocked external clients"
-        )
-        # Mock everything (keeps CIBIL/UIDAI/NSDL offline), then make only the
-        # document-reading stage genuine.
+        logger.info("Building real-document-intelligence pipeline (external clients mocked)")
         pipeline = OnboardingPipeline(mock_mode=True)
         pipeline.doc_processor = DocumentIntelligenceProcessor(mock_mode=False)
+        # Share the admin UI's review queue so customer cases appear live.
+        pipeline.review_processor = review_routes.review_processor
         _real_pipeline = pipeline
     return _real_pipeline
+
+
+def _extract_fields_by_class(pipeline, images: list[np.ndarray]) -> dict[str, dict]:
+    """Run document classification + field extraction per image and collect the
+    fields keyed by document class. Used in real mode to show "what we read" and
+    to cross-check against the typed form. (Mock extraction returns canned values,
+    so this is only meaningful — and only invoked — when real models are active.)"""
+    by_class: dict[str, dict] = {}
+    for img in images:
+        try:
+            result = pipeline.doc_processor.process(img)
+            doc_class = result["classification"].document_class.value
+            by_class[doc_class] = {f.name: f.value for f in result["extraction"].fields}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Extraction pass failed for a document: %s", exc)
+    return by_class
+
+
+def _normalize(value) -> str:
+    return "".join(str(value).split()).upper()
+
+
+def _cross_check(form: dict, extracted: dict[str, dict]) -> list[str]:
+    """Compare typed PAN / Aadhaar numbers against what the models read from the
+    uploaded documents. Returns human-readable mismatch messages."""
+    mismatches: list[str] = []
+    typed_pan = _normalize(form.get("pan_number", ""))
+    read_pan = _normalize(extracted.get("pan", {}).get("pan_number", ""))
+    if typed_pan and read_pan and typed_pan != read_pan:
+        mismatches.append(f"PAN on document ({read_pan}) does not match the PAN you entered ({typed_pan}).")
+
+    typed_aadhaar = _normalize(form.get("aadhaar_number", "")).replace("-", "")
+    read_aadhaar = _normalize(extracted.get("aadhaar", {}).get("aadhaar_number", "")).replace("-", "")
+    if typed_aadhaar and read_aadhaar and typed_aadhaar != read_aadhaar:
+        mismatches.append("Aadhaar number on document does not match the number you entered.")
+    return mismatches
 
 
 @router.get("", response_class=HTMLResponse)
 async def apply_page(request: Request):
     return templates.TemplateResponse(request=request, name="apply.html", context={})
+
+
+@router.get("/mode")
+async def current_mode():
+    """Active document-model mode, so the UI can show a Real/Mock banner."""
+    real = _real_models_active()
+    return {"real_models": real, "mode_label": _mode_label(real)}
+
+
+@router.get("/status/{application_id}", response_class=HTMLResponse)
+async def status_page(request: Request, application_id: str):
+    """Customer status page. Shows the stored submission and the current
+    decision, merging any later action the bank admin took on the case."""
+    path = os.path.join(_storage_dir(), f"{application_id}.json")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Application not found")
+    with open(path, encoding="utf-8") as fh:
+        record = json.load(fh)
+
+    system_decision = (record.get("decision") or {}).get("decision", "review")
+    final_decision = system_decision
+    review_status = None
+    override = None
+    case = review_routes.review_processor.get_case_by_application(application_id)
+    if case is not None:
+        review_status = case.status.value
+        overrides = review_routes.review_processor.get_overrides(application_id)
+        if overrides:
+            override = overrides[-1]
+            final_decision = override.override_decision.value
+
+    return templates.TemplateResponse(
+        request=request,
+        name="status.html",
+        context={
+            "record": record,
+            "application_id": application_id,
+            "system_decision": system_decision,
+            "final_decision": final_decision,
+            "review_status": review_status,
+            "override": override,
+        },
+    )
 
 
 @router.post("/submit")
@@ -162,6 +268,19 @@ async def submit_application(
     if not images:
         raise HTTPException(status_code=400, detail="No valid document images provided")
 
+    real_active = _real_models_active()
+    pipeline = _get_pipeline(real_active)
+
+    form = {
+        "full_name": full_name.strip(),
+        "mobile_number": mobile_number.strip(),
+        "pan_number": pan_number.strip().upper(),
+        "aadhaar_number": aadhaar_number.strip(),
+        "employment_type": employment_type,
+        "monthly_income": monthly_income,
+        "loan_amount": loan_amount,
+    }
+
     app_data = {
         "application_id": application_id,
         "applicant_name": full_name.strip(),
@@ -171,9 +290,23 @@ async def submit_application(
         "employment_tier": 3,
         "declared_monthly_income": monthly_income,
     }
+    # In real mode the models read the actual name off the document, so the
+    # typed name is a meaningful cross-check (the identity processor's BGE-M3
+    # name match reads application_data["full_name"]). In mock mode extraction
+    # returns canned values, so feeding the typed name would falsely mismatch —
+    # we leave it out to preserve the deterministic mock path.
+    if real_active:
+        app_data["full_name"] = full_name.strip()
+
+    # "What we read" + typed-vs-extracted cross-check, real mode only.
+    extracted_fields: dict[str, dict] = {}
+    mismatches: list[str] = []
+    if real_active:
+        extracted_fields = _extract_fields_by_class(pipeline, images)
+        mismatches = _cross_check(form, extracted_fields)
 
     try:
-        decision = await _get_pipeline().execute(
+        decision = await pipeline.execute(
             loan_app,
             images,
             app_data,
@@ -185,23 +318,34 @@ async def submit_application(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Pipeline error: {exc}")
 
+    # A mismatch between the uploaded document and the typed form must not sail
+    # through as an approval — downgrade to REVIEW and surface the reason.
+    if mismatches:
+        decision.review_flags = list(decision.review_flags) + mismatches
+        if decision.decision == Decision.APPROVE:
+            decision.decision = Decision.REVIEW
+
+    # Make sure the case is in the admin queue and labelled with the real name.
+    # The pipeline already enqueues review/reject cases on the shared processor;
+    # if a downgrade created a new REVIEW we may need to enqueue it ourselves.
+    if decision.decision in (Decision.REVIEW, Decision.REJECT):
+        case = review_routes.review_processor.get_case_by_application(application_id)
+        if case is None:
+            case = review_routes.review_processor.create_review_case(decision)
+        case.applicant_name = full_name.strip()
+
     decision_payload = decision.model_dump(mode="json")
 
     record = {
         "application_id": application_id,
         "submitted_at": datetime.now(timezone.utc).isoformat(),
-        "form": {
-            "full_name": full_name.strip(),
-            "mobile_number": mobile_number.strip(),
-            "pan_number": pan_number.strip().upper(),
-            "aadhaar_number": aadhaar_number.strip(),
-            "employment_type": employment_type,
-            "monthly_income": monthly_income,
-            "loan_amount": loan_amount,
-        },
-        "real_models": _REAL_MODELS,
+        "form": form,
+        "real_models": real_active,
+        "mode_label": _mode_label(real_active),
         "documents": accepted_documents,
         "dropped_documents": dropped_documents,
+        "extracted_fields": extracted_fields,
+        "mismatches": mismatches,
         "decision": decision_payload,
     }
 
@@ -222,7 +366,11 @@ async def submit_application(
             "review_flags": decision_payload.get("review_flags", []),
             "documents_processed": accepted_documents,
             "documents_dropped": dropped_documents,
-            "real_models": _REAL_MODELS,
+            "extracted_fields": extracted_fields,
+            "mismatches": mismatches,
+            "real_models": real_active,
+            "mode_label": _mode_label(real_active),
             "stored_at": f"data/demo_applications/{application_id}.json",
+            "status_url": f"/apply/status/{application_id}",
         }
     )

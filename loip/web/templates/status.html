@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOIP — Application Status</title>
+<style>
+  :root{
+    --bg:#1c1c1e; --panel:#2a2a2d; --panel-2:#323235; --line:#3a3a3e;
+    --text:#f5f5f7; --muted:#9a9aa0; --faint:#6e6e73;
+    --accent:#16a06a; --accent-2:#19b377; --accent-soft:#143f30;
+    --warn:#e0962a; --bad:#dc4b4b; --radius:14px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+  .wrap{max-width:720px;margin:0 auto;padding:48px 20px 80px}
+  a.back{color:var(--muted);text-decoration:none;font-size:.85rem}
+  a.back:hover{color:var(--text)}
+  .card{background:var(--panel);border-radius:var(--radius);overflow:hidden;margin-top:16px;
+    box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .card-head{background:linear-gradient(135deg,var(--accent),var(--accent-2));padding:24px 30px}
+  .card-head h1{font-size:1.3rem;font-weight:700}
+  .card-head p{font-size:.85rem;color:rgba(255,255,255,.85);margin-top:2px}
+  .body{padding:26px 30px}
+  .banner{border-radius:12px;padding:20px 22px;text-align:center;margin-bottom:22px}
+  .banner.approve{background:var(--accent-soft);border:1px solid var(--accent)}
+  .banner.review{background:#3a2f12;border:1px solid var(--warn)}
+  .banner.escalate{background:#3a2f12;border:1px solid var(--warn)}
+  .banner.reject{background:#3a1717;border:1px solid var(--bad)}
+  .banner h2{font-size:1.25rem;margin-bottom:4px}
+  .banner p{font-size:.85rem;color:var(--muted)}
+  .row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+  .row:last-child{border-bottom:none}
+  .row .k{color:var(--muted)}
+  .row .v{font-weight:600}
+  .sec{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
+    margin:22px 0 6px}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600}
+  .pill.pending{background:#3a2f12;color:var(--warn)}
+  .pill.completed{background:var(--accent-soft);color:var(--accent-2)}
+  .pill.in_progress{background:#22244a;color:#7c83ff}
+  .pill.escalated{background:#3a1717;color:var(--bad)}
+  .flag{background:#3a2f12;border:1px solid var(--warn);border-radius:8px;padding:10px 12px;
+    font-size:.85rem;margin-bottom:8px;color:#f3d9a8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Back to home</a>
+  <div class="card">
+    <div class="card-head">
+      <h1>Application status</h1>
+      <p>{{ application_id }}</p>
+    </div>
+    <div class="body">
+      {% set d = (override.override_decision.value if override else system_decision) %}
+      <div class="banner {{ final_decision }}">
+        {% if final_decision == 'approve' %}
+          <h2>Approved ✓</h2><p>Your loan application has been approved.</p>
+        {% elif final_decision == 'reject' %}
+          <h2>Not approved</h2><p>Unfortunately this application could not be approved.</p>
+        {% else %}
+          <h2>Under review</h2><p>Our team is reviewing your application. Check back soon.</p>
+        {% endif %}
+      </div>
+
+      <div class="sec">Decision</div>
+      <div class="row"><span class="k">System decision</span><span class="v">{{ system_decision|capitalize }}</span></div>
+      {% if review_status %}
+      <div class="row"><span class="k">Review status</span>
+        <span class="v"><span class="pill {{ review_status }}">{{ review_status|replace('_',' ')|capitalize }}</span></span></div>
+      {% endif %}
+      {% if override %}
+      <div class="row"><span class="k">Bank decision</span><span class="v">{{ override.override_decision.value|capitalize }}</span></div>
+      <div class="row"><span class="k">Reason</span><span class="v">{{ override.reason_code.value|replace('_',' ')|capitalize }}</span></div>
+      {% endif %}
+
+      {% if record.mismatches %}
+      <div class="sec">Flags raised</div>
+      {% for m in record.mismatches %}<div class="flag">{{ m }}</div>{% endfor %}
+      {% endif %}
+
+      <div class="sec">Your application</div>
+      <div class="row"><span class="k">Name</span><span class="v">{{ record.form.full_name }}</span></div>
+      <div class="row"><span class="k">Loan amount</span><span class="v">₹{{ "{:,.0f}".format(record.form.loan_amount) }}</span></div>
+      <div class="row"><span class="k">Monthly income</span><span class="v">₹{{ "{:,.0f}".format(record.form.monthly_income) }}</span></div>
+      <div class="row"><span class="k">Employment</span><span class="v">{{ record.form.employment_type|replace('_',' ')|capitalize }}</span></div>
+      <div class="row"><span class="k">Mode</span><span class="v">{{ record.mode_label or ('Real models' if record.real_models else 'Mock mode') }}</span></div>
+      <div class="row"><span class="k">Submitted</span><span class="v">{{ record.submitted_at[:19]|replace('T',' ') }}</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

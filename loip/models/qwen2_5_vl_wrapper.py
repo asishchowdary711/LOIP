@@ -125,7 +125,12 @@ class Qwen25VLWrapper:
             "prompt": prompt,
             "images": [img_b64],
             "stream": False,
-            "options": {"temperature": 0},
+            # A full-page document image consumes most of the default 4096-token
+            # context; combined with a many-field prompt (e.g. the 12-field
+            # salary slip) the request overflows and Ollama returns HTTP 400
+            # (exceed_context_size_error). Raise the window so multi-field docs
+            # extract cleanly.
+            "options": {"temperature": 0, "num_ctx": 8192},
         }
         req = urllib.request.Request(
             f"{self.ollama_host}/api/generate",

@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from .auth import limiter
-from .routes import admin, audit, consent, demo, evidence, onboard, review, ui, vcip
+from .routes import admin, audit, consent, demo, evidence, home, onboard, review, ui, vcip
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(home.router)
 app.include_router(onboard.router)
 app.include_router(review.router)
 app.include_router(audit.router)
@@ -74,6 +75,12 @@ app.include_router(ui.router)
 app.include_router(consent.router)
 app.include_router(vcip.router)
 app.include_router(demo.router)
+
+# Unify the review queue: the shared mock pipeline that backs /onboard and the
+# demo writes review/reject cases straight into the SAME ReviewProcessor the
+# admin UI (/ui) reads, so customer submissions appear in the bank-admin queue
+# live. (The lazily-built real-models pipeline is wired the same way in demo.py.)
+onboard.pipeline.review_processor = review.review_processor
 
 
 @app.get("/health")
