@@ -45,27 +45,39 @@ def _storage_dir() -> str:
 
 # Real-model toggle. By default the demo reuses the shared mock-mode pipeline
 # (deterministic, no weights, fast — right for CI and cheap demos). Set
-# LOIP_DEMO_REAL_MODELS=1 to build a real (mock_mode=False) pipeline that runs
-# genuine OCR / field-extraction / classification against the uploaded images.
-# Real mode requires torch+transformers (and optionally paddleocr/surya) plus
-# model weights; any wrapper whose deps are missing falls back to mock per its
-# own ImportError guard, so a partial real stack still works. The real pipeline
-# is built lazily on first use and cached so model loading happens once.
+# LOIP_DEMO_REAL_MODELS=1 to genuinely read the UPLOADED DOCUMENTS with real
+# OCR / field-extraction / classification.
+#
+# We deliberately only make the document-intelligence stage real. A full
+# mock_mode=False pipeline would ALSO switch on the external bureau/identity
+# clients (CIBIL/UIDAI/NSDL/DigiLocker), which have no configured endpoints and
+# fail with "Request URL is missing an 'http://' protocol". Those stages stay
+# mocked; only document reading is real. Any document wrapper whose deps are
+# missing falls back to mock via its own ImportError guard (e.g. Qwen uses the
+# local Ollama backend). The pipeline is built lazily on first use and cached.
 _REAL_MODELS = os.getenv("LOIP_DEMO_REAL_MODELS", "0").lower() in ("1", "true", "yes")
 _real_pipeline = None
 
 
 def _get_pipeline():
     """Return the pipeline backing the demo: the shared mock pipeline, or a
-    lazily-built real one when LOIP_DEMO_REAL_MODELS is set."""
+    lazily-built one with real document intelligence when
+    LOIP_DEMO_REAL_MODELS is set."""
     global _real_pipeline
     if not _REAL_MODELS:
         return onboard_routes.pipeline
     if _real_pipeline is None:
+        from loip.domains.document_intel.processor import DocumentIntelligenceProcessor
         from loip.pipelines.onboarding import OnboardingPipeline
 
-        logger.info("LOIP_DEMO_REAL_MODELS set — building real (mock_mode=False) pipeline")
-        _real_pipeline = OnboardingPipeline(mock_mode=False)
+        logger.info(
+            "LOIP_DEMO_REAL_MODELS set — real document intelligence, mocked external clients"
+        )
+        # Mock everything (keeps CIBIL/UIDAI/NSDL offline), then make only the
+        # document-reading stage genuine.
+        pipeline = OnboardingPipeline(mock_mode=True)
+        pipeline.doc_processor = DocumentIntelligenceProcessor(mock_mode=False)
+        _real_pipeline = pipeline
     return _real_pipeline
 
 
