@@ -21,6 +21,7 @@ import {
   uploadSingleDocument
 } from './controllers/loanController';
 import { sseClients } from './engines';
+import analyticsRouter from './analytics';
 
 dotenv.config();
 
@@ -108,6 +109,9 @@ app.get('/api/admin/application/:id', authenticateToken as any, requireAdmin as 
 app.post('/api/admin/approve/:id', authenticateToken as any, requireAdmin as any, approveLoan as any);
 app.post('/api/admin/reject/:id', authenticateToken as any, requireAdmin as any, rejectLoan as any);
 app.post('/api/admin/request-documents/:id', authenticateToken as any, requireAdmin as any, requestDocs as any);
+
+// --- Analytics & Reporting Module Routes (Module 12) ---
+app.use('/api/analytics', analyticsRouter);
 
 // Sandbox Synthetic Testing Injector
 app.post('/api/test-cases/inject', authenticateToken as any, async (req, res) => {

@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
@@ -47,8 +48,9 @@ export async function initializeDatabase() {
   }
 
   // Connect to the new database to initialize schemas
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     console.log('Initializing schemas...');
 
     // 1. Users Table
@@ -131,13 +133,36 @@ export async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
     console.log('Tables verified/created successfully.');
+
+    // Seed Demo User
+    const userExist = await client.query('SELECT 1 FROM users WHERE email = $1', ['user@digital-loan.com']);
+    if (userExist.rowCount === 0) {
+      const userHash = bcrypt.hashSync('user123', 10);
+      await client.query(
+        "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, 'user')",
+        ['Demo User', 'user@digital-loan.com', userHash]
+      );
+      console.log('[Seed] Demo User (user@digital-loan.com / user123) seeded.');
+    }
+
+    // Seed Demo Admin
+    const adminExist = await client.query('SELECT 1 FROM users WHERE email = $1', ['admin@digital-loan.com']);
+    if (adminExist.rowCount === 0) {
+      const adminHash = bcrypt.hashSync('admin123', 10);
+      await client.query(
+        "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, 'admin')",
+        ['Demo Admin', 'admin@digital-loan.com', adminHash]
+      );
+      console.log('[Seed] Demo Admin (admin@digital-loan.com / admin123) seeded.');
+    }
 
     console.log('Database initialization complete.');
   } catch (error) {
     console.error('Error initializing tables/seeding:', error);
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }

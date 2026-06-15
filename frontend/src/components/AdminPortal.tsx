@@ -3,13 +3,15 @@ import {
   Box, Typography, Card, CardContent, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   IconButton, Alert, TextField, Dialog, DialogTitle, DialogContent, DialogActions,
-  Divider, List, ListItem, ListItemText, ListItemIcon
+  Divider, List, ListItem, ListItemText, ListItemIcon,
+  ToggleButton, ToggleButtonGroup
 } from '@mui/material';
 import {
   AppRegistration, VerifiedUser, ErrorOutlined, RateReview, CancelPresentation,
   Schedule, Sync, OpenInNew, Visibility
 } from '@mui/icons-material';
 import axios from 'axios';
+import AnalyticsPortal from './AnalyticsPortal';
 
 interface AdminPortalProps {
   token: string;
@@ -50,6 +52,7 @@ export default function AdminPortal({ token, backendUrl }: AdminPortalProps) {
   const [apps, setApps] = useState<Application[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [appDetail, setAppDetail] = useState<DetailReport | null>(null);
+  const [viewMode, setViewMode] = useState<'queue' | 'reports'>('queue');
 
   // Decision Modal State
   const [actionModalOpen, setActionModalOpen] = useState(false);
@@ -171,8 +174,25 @@ export default function AdminPortal({ token, backendUrl }: AdminPortalProps) {
     <Box component="div" sx={{ p: 3 }}>
       <Box component="div" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>Administrative Review Portal</Typography>
-        <IconButton onClick={fetchApplications} color="primary"><Sync /></IconButton>
+        <Box component="div" sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={(_, val) => val && setViewMode(val)}
+            size="small"
+            sx={{ border: '1px solid rgba(255,255,255,0.06)' }}
+          >
+            <ToggleButton value="queue">Review Queue</ToggleButton>
+            <ToggleButton value="reports">Analytics & Reports</ToggleButton>
+          </ToggleButtonGroup>
+          <IconButton onClick={fetchApplications} color="primary"><Sync /></IconButton>
+        </Box>
       </Box>
+
+      {viewMode === 'reports' ? (
+        <AnalyticsPortal token={token} backendUrl={backendUrl} userRole="admin" />
+      ) : (
+        <>
 
       {/* --- Section 1: Dashboard Metrics grid --- */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px', marginBottom: '32px' }}>
@@ -605,6 +625,8 @@ export default function AdminPortal({ token, backendUrl }: AdminPortalProps) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* --- Action Decision dialog Overlay --- */}
       <Dialog
