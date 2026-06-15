@@ -1,6 +1,6 @@
 {
   "annotation_corpus": {
-    "decision": "ACCEPTED: 25-doc sample is sufficient; the full 10,500-doc corpus (build-plan §5.4) is NOT required",
+    "decision": "ACCEPTED: 25-doc sample is sufficient; the full 10,500-doc corpus (build-plan \u00a75.4) is NOT required",
     "sample_path": "loip/data/annotation_sample25",
     "sample_size": 25,
     "avg_field_match_rate": 0.805,
@@ -9,14 +9,14 @@
   "external_datasets": [
     {
       "name": "MIDV-500",
-      "role": "OCR robustness testing only — European/Russian IDs, NOT Indian document training",
+      "role": "OCR robustness testing only \u2014 European/Russian IDs, NOT Indian document training",
       "status": "deferred",
       "checksum_verified": false,
       "reason": "Distribution URLs 404; real set is 50+ per-type FTP zips (~32GB). Out of scope per build plan (OCR-robustness only; deferred with the Phase B OCR models)."
     },
     {
       "name": "MIDV-2020",
-      "role": "OCR robustness testing — extended lighting/angle variations",
+      "role": "OCR robustness testing \u2014 extended lighting/angle variations",
       "status": "deferred",
       "checksum_verified": false,
       "reason": "Same as MIDV-500: 404 URLs, large FTP-only distribution, OCR-robustness use only."
@@ -46,5 +46,6 @@
       "checksum_verified": false,
       "reason": "Source (rrc.cvc.uab.es) requires a registered account. ANLS scoring math is unit-tested; the live gate runs once weights + a held-out QA set are available."
     }
-  ]
+  ],
+  "download_budget_note": "Keep external dataset downloads within 500 MB to 1 GB total; only FUNSD is intended to be downloaded locally in this workspace snapshot. MIDV-500, MIDV-2020, RVL-CDIP, and DocVQA remain deferred because their official distributions are much larger or require special access."
 }

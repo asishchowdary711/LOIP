@@ -16,6 +16,21 @@ use the 25-doc sample (or generate a small additional batch if needed), and the
 sample, not production gates against the (not-required) full corpus. The
 machine-readable record of this decision is in `data/manifest.json`.
 
+## Download budget — keep external datasets under 500 MB to 1 GB total
+
+For this workspace snapshot, external public dataset downloads should stay
+well below the multi-gigabyte originals. The practical local budget is **no
+more than 500 MB to 1 GB total**, so only lightweight datasets should be
+fetched directly into `loip/data/`. At the moment that means:
+
+- `FUNSD` can be downloaded locally.
+- `MIDV-500`, `MIDV-2020`, `RVL-CDIP`, and `DocVQA` remain deferred because
+  their official distributions are far beyond the local cap or require special
+  access.
+
+If a future run needs more coverage, prefer documenting the source and keeping
+the raw download out of this repo snapshot unless the storage budget changes.
+
 ## Regenerating loip/data/ in a new environment (e.g. Codespaces)
 
 `loip/data/` is mostly **not tracked in git** — the full annotation corpus

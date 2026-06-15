@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
 import tarfile
 import zipfile
@@ -36,6 +37,7 @@ class DatasetSpec:
     archive_type: str  # "zip", "tar.gz", "tar", "none"
     role: str
     size_hint: str
+    estimated_size_mb: float
     extract_subdir: str | None = None
     mirror_urls: list[str] = field(default_factory=list)
 
@@ -48,6 +50,7 @@ DATASETS: dict[str, DatasetSpec] = {
         archive_type="zip",
         role="OCR robustness testing only — European/Russian IDs, NOT Indian doc training",
         size_hint="~1.5 GB",
+        estimated_size_mb=1500.0,
     ),
     "midv2020": DatasetSpec(
         name="MIDV-2020",
@@ -56,6 +59,7 @@ DATASETS: dict[str, DatasetSpec] = {
         archive_type="zip",
         role="OCR robustness testing — extended lighting/angle variations",
         size_hint="~4.5 GB",
+        estimated_size_mb=4500.0,
     ),
     "rvlcdip": DatasetSpec(
         name="RVL-CDIP",
@@ -64,6 +68,7 @@ DATASETS: dict[str, DatasetSpec] = {
         archive_type="tar.gz",
         role="LayoutLMv3 backbone pre-training — 400K docs, 16 categories",
         size_hint="~38 GB",
+        estimated_size_mb=38000.0,
         mirror_urls=[
             "https://adamharley.com/data/rvl-cdip/rvl-cdip.tar.gz",
         ],
@@ -75,6 +80,7 @@ DATASETS: dict[str, DatasetSpec] = {
         archive_type="zip",
         role="Donut backbone pre-training — 199 annotated English forms",
         size_hint="~30 MB",
+        estimated_size_mb=30.0,
     ),
     "docvqa": DatasetSpec(
         name="DocVQA",
@@ -83,6 +89,7 @@ DATASETS: dict[str, DatasetSpec] = {
         archive_type="zip",
         role="Qwen2.5-VL validation benchmark — ANLS ≥ 0.75 gate before production",
         size_hint="~3 GB",
+        estimated_size_mb=3000.0,
     ),
 }
 
@@ -93,6 +100,28 @@ def _compute_sha256(path: Path) -> str:
         while chunk := f.read(CHUNK_SIZE):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _directory_size_bytes(path: Path) -> int:
+    total = 0
+    if not path.exists():
+        return 0
+    for root_dir, _dirs, files in os.walk(path):
+        for name in files:
+            file_path = Path(root_dir) / name
+            try:
+                total += file_path.stat().st_size
+            except FileNotFoundError:
+                continue
+    return total
+
+
+def _current_data_size_mb(root: Path) -> float:
+    return _directory_size_bytes(root) / 1_000_000
+
+
+def _planned_download_size_mb(selected: list[DatasetSpec]) -> float:
+    return sum(spec.estimated_size_mb for spec in selected)
 
 
 def _download_file(url: str, dest: Path, resume: bool = True) -> Path:
@@ -301,12 +330,15 @@ def download_dataset(
               help="Verify checksums after download")
 @click.option("--dry-run", is_flag=True, default=False,
               help="Show what would be downloaded without downloading")
+@click.option("--max-total-size-mb", type=float, default=1000.0, show_default=True,
+              help="Hard cap for total loip/data size plus planned downloads (MB)")
 def main(
     data_dir: str,
     datasets: str,
     skip_existing: bool,
     verify: bool,
     dry_run: bool,
+    max_total_size_mb: float,
 ) -> None:
     """Download and verify research datasets for LOIP model training."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -327,13 +359,32 @@ def main(
                 click.echo(f"Unknown dataset: {k}. Available: {', '.join(DATASETS.keys())}")
                 return
 
+    current_mb = _current_data_size_mb(root)
+    planned_mb = _planned_download_size_mb(selected)
+    projected_mb = current_mb + planned_mb
+
     if dry_run:
         click.echo("\nDry run — would download:\n")
+        click.echo(f"  Current data: {current_mb:.1f} MB")
+        click.echo(f"  Planned downloads: {planned_mb:.1f} MB")
+        click.echo(f"  Projected total: {projected_mb:.1f} MB / {max_total_size_mb:.1f} MB cap")
+        if projected_mb > max_total_size_mb:
+            click.echo("  Budget status: would be refused by the downloader")
+        click.echo()
         for spec in selected:
             click.echo(f"  {spec.name} ({spec.size_hint})")
             click.echo(f"    URL: {spec.url}")
             click.echo(f"    Role: {spec.role}")
             click.echo()
+        return
+
+    if projected_mb > max_total_size_mb:
+        click.echo(
+            f"Refusing to download: current data is {current_mb:.1f} MB, "
+            f"planned downloads are {planned_mb:.1f} MB, and the projected total "
+            f"would be {projected_mb:.1f} MB, which exceeds the {max_total_size_mb:.1f} MB cap."
+        )
+        click.echo("Select fewer datasets or raise --max-total-size-mb if you intentionally want a larger corpus.")
         return
 
     results = []
