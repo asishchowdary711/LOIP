@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-from schemas.decision import LoanApplication, Decision
-from schemas.vcip import VCIPResult, VCIPStatus
+from loip.schemas.decision import LoanApplication, Decision
+from loip.schemas.vcip import VCIPResult, VCIPStatus
 from loip.pipelines.onboarding import OnboardingPipeline
 
 

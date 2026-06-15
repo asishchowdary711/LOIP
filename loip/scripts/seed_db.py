@@ -27,8 +27,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from loip.evaluate import build_mock_images
 from loip.pipelines.onboarding import OnboardingPipeline
-from schemas.consent import ConsentPurpose, ConsentStatus
-from schemas.db_models import (
+from loip.schemas.consent import ConsentPurpose, ConsentStatus
+from loip.schemas.db_models import (
     ApplicationRecord,
     AuditLogRecord,
     Base,
@@ -36,7 +36,7 @@ from schemas.db_models import (
     DocumentRecord,
     EvidenceRecord,
 )
-from schemas.decision import Decision, LoanApplication, OnboardingDecision
+from loip.schemas.decision import Decision, LoanApplication, OnboardingDecision
 from scripts.generators.generate_case import generate_case
 
 # Mock PAN/Aadhaar extraction always returns this identity (see loip/evaluate.py) —

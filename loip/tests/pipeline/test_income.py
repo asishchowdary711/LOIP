@@ -1,7 +1,7 @@
 from loip.domains.income_intel.processor import IncomeIntelligenceProcessor
 from loip.domains.risk_decisioning.processor import RiskDecisionProcessor
-from schemas.income import IncomeFlag
-from schemas.decision import Decision
+from loip.schemas.income import IncomeFlag
+from loip.schemas.decision import Decision
 from loip.tests.fixtures.factories import (
     make_application,
     make_clean_identity,

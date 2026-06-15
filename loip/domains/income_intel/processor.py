@@ -1,5 +1,5 @@
 from loip.models.xgboost_wrapper import XGBoostWrapper
-from schemas.evidence import (
+from loip.schemas.evidence import (
     DocumentType,
     EvidenceChain,
     ExtractedField,
@@ -7,7 +7,7 @@ from schemas.evidence import (
     ReconciliationMethod,
     SourceLocation,
 )
-from schemas.income import IncomeFlag, IncomeResult, IncomeSource, SalaryCredit
+from loip.schemas.income import IncomeFlag, IncomeResult, IncomeSource, SalaryCredit
 
 
 class IncomeIntelligenceProcessor:

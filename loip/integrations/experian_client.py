@@ -6,8 +6,8 @@ cross-validation. Same consent requirements as CIBIL.
 
 from __future__ import annotations
 
-from schemas.bureau import CreditBureauResult
-from schemas.evidence import (
+from loip.schemas.bureau import CreditBureauResult
+from loip.schemas.evidence import (
     EvidenceChain,
     ReconciliationMethod,
 )

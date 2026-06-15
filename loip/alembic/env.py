@@ -6,7 +6,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from schemas.db_models import Base
+from loip.schemas.db_models import Base
 
 config = context.config
 if config.config_file_name is not None:

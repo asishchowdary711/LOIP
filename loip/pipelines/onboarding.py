@@ -1,6 +1,6 @@
 import numpy as np
 from loip.pipelines.base import BasePipeline
-from schemas.decision import LoanApplication, OnboardingDecision
+from loip.schemas.decision import LoanApplication, OnboardingDecision
 from loip.domains.document_intel.processor import DocumentIntelligenceProcessor
 from loip.domains.identity_trust.processor import IdentityTrustProcessor
 from loip.domains.income_intel.processor import IncomeIntelligenceProcessor
@@ -9,7 +9,7 @@ from loip.domains.risk_decisioning.processor import RiskDecisionProcessor
 from loip.domains.fraud.processor import FraudIntelligenceProcessor
 from loip.domains.explainability.processor import ExplainabilityProcessor
 from loip.domains.human_review.processor import ReviewProcessor
-from integrations.cibil_client import CIBILClient
+from loip.integrations.cibil_client import CIBILClient
 
 class OnboardingPipeline(BasePipeline):
     def __init__(self, mock_mode: bool = True):

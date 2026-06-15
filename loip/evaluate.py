@@ -40,7 +40,7 @@ import click
 import numpy as np
 
 from loip.pipelines.onboarding import OnboardingPipeline
-from schemas.decision import LoanApplication, OnboardingDecision
+from loip.schemas.decision import LoanApplication, OnboardingDecision
 
 # Mock Qwen2.5-VL PAN/Aadhaar extraction always returns these values
 # (models/qwen2_5_vl_wrapper.py) — align application_data to them so the

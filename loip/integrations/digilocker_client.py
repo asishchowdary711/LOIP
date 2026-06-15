@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from schemas.evidence import (
+from loip.schemas.evidence import (
     EvidenceChain,
     ReconciliationMethod,
 )

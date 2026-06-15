@@ -1,6 +1,6 @@
 from loip.models.lightgbm_wrapper import LightGBMWrapper
-from schemas.affordability import AffordabilityResult, AffordabilityFlag
-from schemas.evidence import EvidenceChain, ReconciliationMethod
+from loip.schemas.affordability import AffordabilityResult, AffordabilityFlag
+from loip.schemas.evidence import EvidenceChain, ReconciliationMethod
 
 class AffordabilityProcessor:
     def __init__(self, mock_mode: bool = True):

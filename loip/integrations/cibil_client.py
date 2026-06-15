@@ -10,8 +10,8 @@ before this API is called (DPDP Act + RBI DLG compliance).
 
 from __future__ import annotations
 
-from schemas.bureau import CreditBureauResult
-from schemas.evidence import (
+from loip.schemas.bureau import CreditBureauResult
+from loip.schemas.evidence import (
     EvidenceChain,
     ReconciliationMethod,
 )

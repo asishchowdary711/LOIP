@@ -1,13 +1,13 @@
 from loip.domains.identity_trust.vcip import VCIPProcessor
 from loip.models.xgboost_wrapper import XGBoostWrapper
-from schemas.affordability import AffordabilityResult
-from schemas.bureau import CreditBureauResult
-from schemas.decision import (
+from loip.schemas.affordability import AffordabilityResult
+from loip.schemas.bureau import CreditBureauResult
+from loip.schemas.decision import (
     OnboardingDecision, Decision, ReasonCode, LoanApplication
 )
-from schemas.identity import IdentityVerificationResult, IdentityFlag
-from schemas.income import IncomeResult, IncomeFlag
-from schemas.vcip import VCIPResult, VCIPStatus
+from loip.schemas.identity import IdentityVerificationResult, IdentityFlag
+from loip.schemas.income import IncomeResult, IncomeFlag
+from loip.schemas.vcip import VCIPResult, VCIPStatus
 
 class RiskDecisionProcessor:
     def __init__(self, mock_mode: bool = True):

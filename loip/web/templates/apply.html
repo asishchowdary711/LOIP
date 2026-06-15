@@ -187,7 +187,7 @@ SLOTS.forEach(s=>{
   d.className='slot';d.dataset.key=s.key;
   d.innerHTML=`<div class="thumb"></div><div class="sicon"></div>
     <div class="stitle">${s.title}</div><div class="ssub">${s.sub}</div>
-    <div class="fname"></div><input type="file" accept="image/*">`;
+    <div class="fname"></div><input type="file" accept="image/*,application/pdf">`;
   const input=d.querySelector('input');
   input.addEventListener('change',e=>{
     const f=e.target.files[0];if(!f)return;

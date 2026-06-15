@@ -12,13 +12,13 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from schemas.evidence import (
+from loip.schemas.evidence import (
     EvidenceChain,
     ExtractionMethod,
     ReconciliationMethod,
     SourceLocation,
 )
-from schemas.identity import APIVerificationResult
+from loip.schemas.identity import APIVerificationResult
 
 from .base import BaseClient, IntegrationError
 

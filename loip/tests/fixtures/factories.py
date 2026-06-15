@@ -1,12 +1,12 @@
 """Shared factory helpers for building clean baseline domain results used across the Phase 1 DoD test suite."""
 
-from schemas.affordability import AffordabilityResult
-from schemas.bureau import CreditBureauResult
-from schemas.decision import LoanApplication
-from schemas.evidence import EvidenceChain, ReconciliationMethod
-from schemas.fraud import FraudResult
-from schemas.identity import IdentityVerificationResult
-from schemas.income import IncomeResult
+from loip.schemas.affordability import AffordabilityResult
+from loip.schemas.bureau import CreditBureauResult
+from loip.schemas.decision import LoanApplication
+from loip.schemas.evidence import EvidenceChain, ReconciliationMethod
+from loip.schemas.fraud import FraudResult
+from loip.schemas.identity import IdentityVerificationResult
+from loip.schemas.income import IncomeResult
 
 
 def make_application(**overrides) -> LoanApplication:

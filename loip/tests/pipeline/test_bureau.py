@@ -1,5 +1,5 @@
 from loip.domains.risk_decisioning.processor import RiskDecisionProcessor
-from schemas.decision import Decision
+from loip.schemas.decision import Decision
 from loip.tests.fixtures.factories import (
     make_application,
     make_clean_identity,

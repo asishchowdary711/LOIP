@@ -1,8 +1,8 @@
 import pytest
 
-from schemas.identity import APIVerificationResult, IdentityFlag
-from schemas.evidence import EvidenceChain, ReconciliationMethod
-from schemas.decision import Decision
+from loip.schemas.identity import APIVerificationResult, IdentityFlag
+from loip.schemas.evidence import EvidenceChain, ReconciliationMethod
+from loip.schemas.decision import Decision
 from loip.domains.identity_trust.processor import IdentityTrustProcessor
 from loip.domains.risk_decisioning.processor import RiskDecisionProcessor
 from loip.tests.fixtures.factories import (

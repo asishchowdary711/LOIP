@@ -1,9 +1,9 @@
 from loip.models.bge_m3_wrapper import BGEM3Wrapper
 from loip.models.arcface_wrapper import ArcFaceWrapper
 from loip.models.minifasnet_wrapper import MiniFASNetWrapper
-from integrations.nsdl_client import NSDLClient
-from integrations.uidai_client import UIDAIClient
-from schemas.identity import (
+from loip.integrations.nsdl_client import NSDLClient
+from loip.integrations.uidai_client import UIDAIClient
+from loip.schemas.identity import (
     IdentityVerificationResult, EntityMatch, APIVerificationResult, IdentityFlag
 )
 

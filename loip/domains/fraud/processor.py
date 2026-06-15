@@ -2,8 +2,8 @@ import logging
 
 from loip.models.graphsage_wrapper import GraphSAGEWrapper
 from loip.validation import validate_mrz_td3
-from schemas.evidence import EvidenceChain, ReconciliationMethod
-from schemas.fraud import FraudResult, FraudSignal, FraudSignalType
+from loip.schemas.evidence import EvidenceChain, ReconciliationMethod
+from loip.schemas.fraud import FraudResult, FraudSignal, FraudSignalType
 
 logger = logging.getLogger(__name__)
 

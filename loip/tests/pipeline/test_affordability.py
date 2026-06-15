@@ -1,7 +1,7 @@
 from loip.domains.affordability.processor import AffordabilityProcessor
 from loip.domains.risk_decisioning.processor import RiskDecisionProcessor
-from schemas.affordability import AffordabilityFlag
-from schemas.decision import Decision
+from loip.schemas.affordability import AffordabilityFlag
+from loip.schemas.decision import Decision
 from loip.tests.fixtures.factories import (
     make_application,
     make_clean_identity,

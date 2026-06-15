@@ -11,12 +11,12 @@ consent but does not enforce it — the pipeline layer must enforce.
 
 from __future__ import annotations
 
-from schemas.evidence import (
+from loip.schemas.evidence import (
     EvidenceChain,
     ExtractionMethod,
     ReconciliationMethod,
 )
-from schemas.identity import APIVerificationResult
+from loip.schemas.identity import APIVerificationResult
 
 from .base import BaseClient, ConsentRequiredError, IntegrationError
 

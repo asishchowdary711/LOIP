@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 import cv2
+import fitz
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -123,14 +124,40 @@ async def submit_application(
     dropped_documents: list[str] = []
     for doc in documents:
         contents = await doc.read()
-        nparr = np.frombuffer(contents, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is not None:
-            images.append(img)
-            raw_documents.append(contents)
-            accepted_documents.append(doc.filename)
+        filename = doc.filename or "unknown"
+        is_pdf = (
+            filename.lower().endswith(".pdf")
+            or doc.content_type == "application/pdf"
+            or contents[:5] == b"%PDF-"
+        )
+        if is_pdf:
+            try:
+                pdf = fitz.open(stream=contents, filetype="pdf")
+                for page in pdf:
+                    pix = page.get_pixmap(dpi=200)
+                    img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                        pix.h, pix.w, pix.n
+                    )
+                    if pix.n == 4:
+                        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+                    else:
+                        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                    images.append(img_bgr)
+                    raw_documents.append(contents)
+                    accepted_documents.append(f"{filename} (p{page.number + 1})")
+                pdf.close()
+            except Exception:
+                logger.warning("Could not parse PDF: %s", filename)
+                dropped_documents.append(filename)
         else:
-            dropped_documents.append(doc.filename)
+            nparr = np.frombuffer(contents, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is not None:
+                images.append(img)
+                raw_documents.append(contents)
+                accepted_documents.append(filename)
+            else:
+                dropped_documents.append(filename)
 
     if not images:
         raise HTTPException(status_code=400, detail="No valid document images provided")

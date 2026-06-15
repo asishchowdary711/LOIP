@@ -12,7 +12,7 @@ import pytest
 from loip import persistence
 from loip.pipelines.onboarding import OnboardingPipeline
 from loip.schemas.decision import LoanApplication
-from schemas.db_models import ApplicationRecord, EvidenceRecord, ReviewOverrideRecord
+from loip.schemas.db_models import ApplicationRecord, EvidenceRecord, ReviewOverrideRecord
 
 TEST_APP_ID = "PYTEST-PERSIST-1"
 

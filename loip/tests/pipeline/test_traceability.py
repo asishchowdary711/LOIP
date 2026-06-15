@@ -1,10 +1,10 @@
 import pytest
 
-from schemas.evidence import ReconciliationMethod
+from loip.schemas.evidence import ReconciliationMethod
 from loip.domains.identity_trust.processor import IdentityTrustProcessor
 from loip.tests.fixtures.clean_salaried import EXTRACTED_FIELDS, APPLICATION_DATA
-from integrations.cibil_client import CIBILClient
-from integrations.base import ConsentRequiredError
+from loip.integrations.cibil_client import CIBILClient
+from loip.integrations.base import ConsentRequiredError
 
 
 @pytest.mark.asyncio
