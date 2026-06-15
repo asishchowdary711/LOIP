@@ -38,10 +38,6 @@ _DATA_DIR = os.path.join(
     "demo_applications",
 )
 
-# The four documents the demo collects, in submission order.
-DEMO_DOCUMENT_SLOTS = ["aadhaar", "pan", "salary_slip", "bank_statement"]
-
-
 def _storage_dir() -> str:
     os.makedirs(_DATA_DIR, exist_ok=True)
     return _DATA_DIR
@@ -85,6 +81,8 @@ async def submit_application(
 
     images: list[np.ndarray] = []
     raw_documents: list[bytes] = []
+    accepted_documents: list[str] = []
+    dropped_documents: list[str] = []
     for doc in documents:
         contents = await doc.read()
         nparr = np.frombuffer(contents, np.uint8)
@@ -92,6 +90,9 @@ async def submit_application(
         if img is not None:
             images.append(img)
             raw_documents.append(contents)
+            accepted_documents.append(doc.filename)
+        else:
+            dropped_documents.append(doc.filename)
 
     if not images:
         raise HTTPException(status_code=400, detail="No valid document images provided")
@@ -133,7 +134,8 @@ async def submit_application(
             "monthly_income": monthly_income,
             "loan_amount": loan_amount,
         },
-        "documents": [doc.filename for doc in documents],
+        "documents": accepted_documents,
+        "dropped_documents": dropped_documents,
         "decision": decision_payload,
     }
 
@@ -152,6 +154,8 @@ async def submit_application(
             "loan_amount": decision_payload.get("loan_amount"),
             "reason_codes": decision_payload.get("reason_codes", []),
             "review_flags": decision_payload.get("review_flags", []),
+            "documents_processed": accepted_documents,
+            "documents_dropped": dropped_documents,
             "stored_at": f"data/demo_applications/{application_id}.json",
         }
     )

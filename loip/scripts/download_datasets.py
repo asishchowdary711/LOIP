@@ -120,8 +120,30 @@ def _current_data_size_mb(root: Path) -> float:
     return _directory_size_bytes(root) / 1_000_000
 
 
-def _planned_download_size_mb(selected: list[DatasetSpec]) -> float:
-    return sum(spec.estimated_size_mb for spec in selected)
+def _dataset_dir(root: Path, spec: DatasetSpec) -> Path:
+    return root / spec.name.lower().replace("-", "_").replace(" ", "_")
+
+
+def _is_already_present(root: Path, spec: DatasetSpec) -> bool:
+    dataset_dir = _dataset_dir(root, spec)
+    return dataset_dir.exists() and any(dataset_dir.iterdir())
+
+
+def _planned_download_size_mb(
+    selected: list[DatasetSpec], root: Path, skip_existing: bool
+) -> float:
+    """Estimated size of datasets that would actually be downloaded.
+
+    Datasets already present on disk (and skipped when ``skip_existing`` is
+    set) are excluded — otherwise their size is double-counted against the
+    budget (once in the current on-disk size, once in planned downloads),
+    wrongly refusing runs that download nothing new.
+    """
+    return sum(
+        spec.estimated_size_mb
+        for spec in selected
+        if not (skip_existing and _is_already_present(root, spec))
+    )
 
 
 def _download_file(url: str, dest: Path, resume: bool = True) -> Path:
@@ -360,7 +382,7 @@ def main(
                 return
 
     current_mb = _current_data_size_mb(root)
-    planned_mb = _planned_download_size_mb(selected)
+    planned_mb = _planned_download_size_mb(selected, root, skip_existing)
     projected_mb = current_mb + planned_mb
 
     if dry_run:
