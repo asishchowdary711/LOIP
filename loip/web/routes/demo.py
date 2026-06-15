@@ -43,6 +43,32 @@ def _storage_dir() -> str:
     return _DATA_DIR
 
 
+# Real-model toggle. By default the demo reuses the shared mock-mode pipeline
+# (deterministic, no weights, fast — right for CI and cheap demos). Set
+# LOIP_DEMO_REAL_MODELS=1 to build a real (mock_mode=False) pipeline that runs
+# genuine OCR / field-extraction / classification against the uploaded images.
+# Real mode requires torch+transformers (and optionally paddleocr/surya) plus
+# model weights; any wrapper whose deps are missing falls back to mock per its
+# own ImportError guard, so a partial real stack still works. The real pipeline
+# is built lazily on first use and cached so model loading happens once.
+_REAL_MODELS = os.getenv("LOIP_DEMO_REAL_MODELS", "0").lower() in ("1", "true", "yes")
+_real_pipeline = None
+
+
+def _get_pipeline():
+    """Return the pipeline backing the demo: the shared mock pipeline, or a
+    lazily-built real one when LOIP_DEMO_REAL_MODELS is set."""
+    global _real_pipeline
+    if not _REAL_MODELS:
+        return onboard_routes.pipeline
+    if _real_pipeline is None:
+        from loip.pipelines.onboarding import OnboardingPipeline
+
+        logger.info("LOIP_DEMO_REAL_MODELS set — building real (mock_mode=False) pipeline")
+        _real_pipeline = OnboardingPipeline(mock_mode=False)
+    return _real_pipeline
+
+
 @router.get("", response_class=HTMLResponse)
 async def apply_page(request: Request):
     return templates.TemplateResponse(request=request, name="apply.html", context={})
@@ -108,7 +134,7 @@ async def submit_application(
     }
 
     try:
-        decision = await onboard_routes.pipeline.execute(
+        decision = await _get_pipeline().execute(
             loan_app,
             images,
             app_data,
@@ -134,6 +160,7 @@ async def submit_application(
             "monthly_income": monthly_income,
             "loan_amount": loan_amount,
         },
+        "real_models": _REAL_MODELS,
         "documents": accepted_documents,
         "dropped_documents": dropped_documents,
         "decision": decision_payload,
@@ -156,6 +183,7 @@ async def submit_application(
             "review_flags": decision_payload.get("review_flags", []),
             "documents_processed": accepted_documents,
             "documents_dropped": dropped_documents,
+            "real_models": _REAL_MODELS,
             "stored_at": f"data/demo_applications/{application_id}.json",
         }
     )
