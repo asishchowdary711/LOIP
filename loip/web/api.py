@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from .auth import limiter
-from .routes import admin, audit, consent, evidence, onboard, review, ui, vcip
+from .routes import admin, audit, consent, demo, evidence, onboard, review, ui, vcip
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,7 @@ app.include_router(admin.router)
 app.include_router(ui.router)
 app.include_router(consent.router)
 app.include_router(vcip.router)
+app.include_router(demo.router)
 
 
 @app.get("/health")
