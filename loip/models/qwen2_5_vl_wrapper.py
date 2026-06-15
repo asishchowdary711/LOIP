@@ -1,13 +1,23 @@
 import json
+import logging
+import os
 import re
 
 import numpy as np
 
 from loip.domains.document_intel.schemas import FIELD_SPECS, DocumentClass, ExtractionField, ExtractionResult
 
+logger = logging.getLogger(__name__)
+
 # Default model — configurable via constructor for smaller/larger variants
 # (e.g. "Qwen/Qwen2.5-VL-7B-Instruct").
 DEFAULT_MODEL = "Qwen/Qwen2.5-VL-3B-Instruct"
+
+# Ollama backend defaults. Ollama serves a quantized Qwen2.5-VL locally and is
+# far cheaper than downloading the full HF weights — when it's running, real
+# mode prefers it. Override via env.
+OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("LOIP_QWEN_OLLAMA_MODEL", "qwen2.5vl:3b")
 
 # Confidence when the model returns a complete, well-formed JSON object
 # containing every expected field.
@@ -22,18 +32,46 @@ class Qwen25VLWrapper:
         self.model_name = model_name
         self.processor = None
         self.model = None
+        # One of: "mock", "ollama", "hf". Set during real-mode init.
+        self.backend = "mock"
+        self.ollama_host = OLLAMA_HOST
+        self.ollama_model = OLLAMA_MODEL
 
         if not self.mock_mode:
-            try:
-                from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+            # Prefer Ollama when reachable (cheap, no multi-GB HF download);
+            # set LOIP_QWEN_BACKEND=hf to force the transformers path.
+            prefer = os.getenv("LOIP_QWEN_BACKEND", "ollama").lower()
+            if prefer == "ollama" and self._ollama_available():
+                self.backend = "ollama"
+                logger.info("Qwen2.5-VL: using Ollama backend (%s @ %s)", self.ollama_model, self.ollama_host)
+            else:
+                try:
+                    from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
-                self.processor = AutoProcessor.from_pretrained(self.model_name)
-                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                    self.model_name, torch_dtype="auto", device_map="auto",
-                )
-                self.model.eval()
-            except ImportError:
-                self.mock_mode = True
+                    self.processor = AutoProcessor.from_pretrained(self.model_name)
+                    self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                        self.model_name, torch_dtype="auto", device_map="auto",
+                    )
+                    self.model.eval()
+                    self.backend = "hf"
+                    logger.info("Qwen2.5-VL: using HuggingFace transformers backend (%s)", self.model_name)
+                except ImportError:
+                    logger.warning(
+                        "Qwen2.5-VL: neither Ollama nor transformers available — falling back to mock"
+                    )
+                    self.mock_mode = True
+                    self.backend = "mock"
+
+    def _ollama_available(self) -> bool:
+        """Quick reachability probe for the local Ollama server."""
+        import urllib.error
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(f"{self.ollama_host}/api/tags", timeout=2) as resp:
+                return resp.status == 200
+        except (urllib.error.URLError, OSError, ValueError):
+            return False
 
     @staticmethod
     def _parse_json(text: str) -> dict:
@@ -44,6 +82,64 @@ class Qwen25VLWrapper:
             return json.loads(match.group())
         except json.JSONDecodeError:
             return {}
+
+    def _build_result(self, parsed: dict, doc_class: DocumentClass) -> ExtractionResult:
+        """Turn a parsed JSON dict into an ExtractionResult (shared by the
+        Ollama and HF backends)."""
+        field_names = FIELD_SPECS.get(doc_class, [])
+        if not parsed:
+            return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
+
+        found_all = all(name in parsed for name in field_names)
+        confidence = FULL_MATCH_CONFIDENCE if found_all else PARTIAL_MATCH_CONFIDENCE
+        fields = [
+            ExtractionField(name=name, value=str(parsed[name]), confidence=confidence)
+            for name in field_names
+            if parsed.get(name)
+        ]
+        overall_confidence = confidence if fields else 0.0
+        return ExtractionResult(
+            document_class=doc_class, fields=fields, model="qwen2.5-vl", overall_confidence=overall_confidence
+        )
+
+    def _extract_ollama(self, image: np.ndarray, doc_class: DocumentClass) -> ExtractionResult:
+        import base64
+        import urllib.request
+
+        import cv2
+
+        field_names = FIELD_SPECS.get(doc_class, [])
+        ok, buf = cv2.imencode(".png", image)
+        if not ok:
+            return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
+        img_b64 = base64.b64encode(buf.tobytes()).decode()
+
+        prompt = (
+            "Extract the following fields from this document image and return "
+            "ONLY a JSON object with these exact keys: "
+            f"{', '.join(field_names)}. "
+            "If a field is not visible or not present, use an empty string as its value."
+        )
+        payload = {
+            "model": self.ollama_model,
+            "prompt": prompt,
+            "images": [img_b64],
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+        req = urllib.request.Request(
+            f"{self.ollama_host}/api/generate",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                body = json.loads(resp.read())
+        except (OSError, ValueError) as exc:
+            logger.warning("Qwen2.5-VL Ollama request failed: %s", exc)
+            return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
+
+        return self._build_result(self._parse_json(body.get("response", "")), doc_class)
 
     def extract_fields(self, image: np.ndarray, doc_class: DocumentClass) -> ExtractionResult:
         if self.mock_mode:
@@ -80,6 +176,9 @@ class Qwen25VLWrapper:
                 overall_confidence=0.96
             )
 
+        if self.backend == "ollama":
+            return self._extract_ollama(image, doc_class)
+
         import torch
         from PIL import Image as PILImage
 
@@ -110,17 +209,4 @@ class Qwen25VLWrapper:
         generated_ids = output_ids[:, inputs["input_ids"].shape[1]:]
         response = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
-        parsed = self._parse_json(response)
-        if not parsed:
-            return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
-
-        found_all = all(name in parsed for name in field_names)
-        confidence = FULL_MATCH_CONFIDENCE if found_all else PARTIAL_MATCH_CONFIDENCE
-
-        fields = [
-            ExtractionField(name=name, value=str(parsed[name]), confidence=confidence)
-            for name in field_names
-            if parsed.get(name)
-        ]
-        overall_confidence = confidence if fields else 0.0
-        return ExtractionResult(document_class=doc_class, fields=fields, model="qwen2.5-vl", overall_confidence=overall_confidence)
+        return self._build_result(self._parse_json(response), doc_class)
