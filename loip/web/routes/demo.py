@@ -112,18 +112,19 @@ def _get_face_app():
 
 
 def _eye_aspect_ratio(landmarks_2d_106):
-    """Compute a simple eye-aspect-ratio from the 106-point 2D landmarks.
-    Points 33-42 are the left eye contour, 87-96 the right eye contour.
-    A low EAR (<0.21) means the eyes are closed (blink)."""
-    def ear_one_eye(pts, top, bottom, left, right):
-        v1 = np.linalg.norm(pts[top] - pts[bottom])
-        v2 = np.linalg.norm(pts[top + 1] - pts[bottom - 1]) if top + 1 < len(pts) and bottom - 1 >= 0 else v1
-        h = np.linalg.norm(pts[left] - pts[right])
-        return (v1 + v2) / (2.0 * h + 1e-6)
-
+    """Bounding-box EAR: height/width of each eye's 10-point contour.
+    InsightFace 2D-106: left eye = pts[33:43], right eye = pts[87:97].
+    Open eye ≈ 0.28-0.40; closed eye ≈ 0.05-0.15 — much wider gap than
+    the 6-point formula, so the 350 ms polling window is less critical."""
     pts = np.array(landmarks_2d_106)
-    left_ear = ear_one_eye(pts, 37, 41, 33, 39)
-    right_ear = ear_one_eye(pts, 93, 97, 87, 95)
+
+    def bbox_ear(eye_pts):
+        h = eye_pts[:, 1].max() - eye_pts[:, 1].min()
+        w = eye_pts[:, 0].max() - eye_pts[:, 0].min()
+        return h / (w + 1e-6)
+
+    left_ear = bbox_ear(pts[33:43])
+    right_ear = bbox_ear(pts[87:97])
     return (left_ear + right_ear) / 2.0
 
 

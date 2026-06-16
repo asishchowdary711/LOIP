@@ -156,11 +156,16 @@ class IncomeIntelligenceProcessor:
             stmt = extracted_data["bank_statement"]
             if "salary_credits" in stmt:
                 credits = [SalaryCredit(**c) for c in stmt["salary_credits"]]
-            else:
-                # Mocking salary credit detection or cash flow for self-employed
+            elif salary_slip_amount or itr_amount:
+                # Use the corroborated salary/income figure from other documents
+                # rather than a hardcoded default.
+                best_amount = salary_slip_amount or (itr_amount / 12)
                 credits = [
-                    SalaryCredit(amount=salary_slip_amount or (itr_amount/12) or 50000.0, date="01/01/2026", narration="CREDIT")
+                    SalaryCredit(amount=best_amount, date="01/01/2026", narration="CREDIT")
                 ]
+            else:
+                # No corroborating income document — flag it rather than fabricating a number.
+                credits = []
             result.salary_credits = credits
             if credits:
                 bank_credit_amount = sum(c.amount for c in credits) / len(credits)
