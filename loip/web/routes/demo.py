@@ -7,6 +7,7 @@ existing `/onboard` pipeline. Submissions are stored as local JSON files
 `/onboard` produces the decision shown to the applicant.
 """
 
+import base64
 import json
 import logging
 import os
@@ -90,6 +91,42 @@ def _mode_label(real: bool) -> str:
     return "Real models — reading your documents" if real else "Mock mode — simulated extraction"
 
 
+# ---------------------------------------------------------------------------
+# Liveness detection via InsightFace (buffalo_l)
+# ---------------------------------------------------------------------------
+_face_app = None
+
+
+def _get_face_app():
+    global _face_app
+    if _face_app is None:
+        try:
+            from insightface.app import FaceAnalysis
+
+            _face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+            _face_app.prepare(ctx_id=-1, det_size=(320, 320))
+            logger.info("InsightFace buffalo_l loaded for liveness detection")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not load InsightFace: %s", exc)
+    return _face_app
+
+
+def _eye_aspect_ratio(landmarks_2d_106):
+    """Compute a simple eye-aspect-ratio from the 106-point 2D landmarks.
+    Points 33-42 are the left eye contour, 87-96 the right eye contour.
+    A low EAR (<0.21) means the eyes are closed (blink)."""
+    def ear_one_eye(pts, top, bottom, left, right):
+        v1 = np.linalg.norm(pts[top] - pts[bottom])
+        v2 = np.linalg.norm(pts[top + 1] - pts[bottom - 1]) if top + 1 < len(pts) and bottom - 1 >= 0 else v1
+        h = np.linalg.norm(pts[left] - pts[right])
+        return (v1 + v2) / (2.0 * h + 1e-6)
+
+    pts = np.array(landmarks_2d_106)
+    left_ear = ear_one_eye(pts, 37, 41, 33, 39)
+    right_ear = ear_one_eye(pts, 93, 97, 87, 95)
+    return (left_ear + right_ear) / 2.0
+
+
 def _get_pipeline(real_active: bool):
     """Return the pipeline backing the demo: the shared mock pipeline, or a
     lazily-built one with real document intelligence when Ollama is reachable."""
@@ -155,6 +192,56 @@ async def current_mode():
     """Active document-model mode, so the UI can show a Real/Mock banner."""
     real = _real_models_active()
     return {"real_models": real, "mode_label": _mode_label(real)}
+
+
+@router.post("/liveness")
+async def liveness_check(request: Request):
+    """Receive a base64-encoded webcam frame, run InsightFace face analysis,
+    and return head yaw angle + eye-aspect-ratio for the frontend liveness
+    challenge (turn right, turn left, blink)."""
+    body = await request.json()
+    frame_b64 = body.get("frame", "")
+    if not frame_b64:
+        return JSONResponse({"face": False, "error": "no frame"})
+
+    if "," in frame_b64:
+        frame_b64 = frame_b64.split(",", 1)[1]
+
+    try:
+        raw = base64.b64decode(frame_b64)
+        nparr = np.frombuffer(raw, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    except Exception:
+        return JSONResponse({"face": False, "error": "decode failed"})
+
+    if img is None:
+        return JSONResponse({"face": False, "error": "invalid image"})
+
+    app = _get_face_app()
+    if app is None:
+        return JSONResponse({"face": False, "error": "insightface not available"})
+
+    faces = app.get(img)
+    if not faces:
+        return JSONResponse({"face": False, "yaw": 0, "ear": 0.3})
+
+    face = faces[0]
+
+    yaw = 0.0
+    if hasattr(face, "pose") and face.pose is not None:
+        yaw = float(face.pose[1])
+    elif hasattr(face, "embedding"):
+        yaw = 0.0
+
+    ear = 0.3
+    if hasattr(face, "landmark_2d_106") and face.landmark_2d_106 is not None:
+        ear = float(_eye_aspect_ratio(face.landmark_2d_106))
+
+    return JSONResponse({
+        "face": True,
+        "yaw": round(yaw, 1),
+        "ear": round(ear, 3),
+    })
 
 
 @router.get("/status/{application_id}", response_class=HTMLResponse)

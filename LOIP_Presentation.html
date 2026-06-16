@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOIP — Loan Onboarding Intelligence Platform</title>
+<style>
+:root{
+  --bg:#0c0e13; --bg2:#11141b; --card:#171b24; --card2:#1d222d;
+  --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.16);
+  --tp:#f4f6fa; --ts:#aab2c0; --tt:#727c8e;
+  --acc:#5b9dff; --acc2:#8b6cff; --ok:#37d39a; --warn:#ffb43d; --bad:#ff6b6b;
+  --grad:linear-gradient(120deg,#5b9dff,#8b6cff 60%,#c46bff);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+  background:radial-gradient(1200px 700px at 80% -10%,rgba(139,108,255,.10),transparent 60%),
+             radial-gradient(900px 600px at -5% 10%,rgba(91,157,255,.08),transparent 55%),var(--bg);
+  color:var(--tp); line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--acc);text-decoration:none}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);
+  background:rgba(12,14,19,.72);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:18px;height:58px;overflow-x:auto;scrollbar-width:none}
+nav .wrap::-webkit-scrollbar{display:none}
+nav .brand{font-weight:800;letter-spacing:.5px;white-space:nowrap;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+nav a.lnk{color:var(--ts);font-size:13.5px;font-weight:600;white-space:nowrap;padding:6px 2px;border-bottom:2px solid transparent;transition:.2s}
+nav a.lnk:hover{color:var(--tp)}
+nav a.lnk.active{color:var(--tp);border-color:var(--acc)}
+
+/* HERO */
+header{padding:78px 0 56px;text-align:center;position:relative}
+.kick{display:inline-block;font-size:12px;font-weight:700;letter-spacing:2px;color:var(--acc);
+  border:1px solid var(--line2);border-radius:30px;padding:6px 16px;margin-bottom:22px;text-transform:uppercase}
+h1{font-size:clamp(34px,6vw,62px);line-height:1.05;font-weight:850;letter-spacing:-1.5px}
+h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--ts);font-size:clamp(15px,2.2vw,19px);max-width:680px;margin:20px auto 0}
+.stats{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:38px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 24px;min-width:130px}
+.stat b{display:block;font-size:30px;font-weight:850;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{font-size:12.5px;color:var(--tt);font-weight:600}
+
+/* SECTIONS */
+section{padding:54px 0;border-top:1px solid var(--line)}
+.eyebrow{font-size:12px;font-weight:800;letter-spacing:2px;color:var(--acc2);text-transform:uppercase;margin-bottom:10px}
+h2{font-size:clamp(24px,4vw,34px);font-weight:800;letter-spacing:-.5px;margin-bottom:8px}
+.lead{color:var(--ts);font-size:16px;max-width:760px;margin-bottom:28px}
+h3{font-size:18px;font-weight:750;margin:26px 0 12px}
+
+/* CARDS / GRID */
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:760px){.g2,.g3,.g4{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;transition:.22s}
+.card:hover{border-color:var(--line2);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.card .ico{font-size:24px;margin-bottom:10px}
+.card h4{font-size:15.5px;font-weight:750;margin-bottom:6px}
+.card p{font-size:13.5px;color:var(--ts)}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin:2px 4px 2px 0}
+.pill.ok{background:rgba(55,211,154,.14);color:var(--ok)}
+.pill.warn{background:rgba(255,180,61,.14);color:var(--warn)}
+.pill.bad{background:rgba(255,107,107,.14);color:var(--bad)}
+.pill.n{background:rgba(255,255,255,.06);color:var(--ts)}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px;overflow:hidden;border-radius:14px;border:1px solid var(--line)}
+.tbl th{text-align:left;background:var(--card2);color:var(--ts);font-weight:700;padding:12px 14px;font-size:12px;letter-spacing:.4px;text-transform:uppercase}
+.tbl td{padding:12px 14px;border-top:1px solid var(--line);vertical-align:top}
+.tbl tr:hover td{background:rgba(255,255,255,.025)}
+.tbl code{background:rgba(91,157,255,.12);color:#aecbff;padding:2px 7px;border-radius:6px;font-size:12.5px}
+.scroll{overflow-x:auto}
+
+/* PIPELINE */
+.flow{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+.stage{flex:1;min-width:115px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;transition:.3s;cursor:pointer}
+.stage:hover{border-color:var(--acc)}
+.stage.on{border-color:var(--acc);background:linear-gradient(180deg,rgba(91,157,255,.14),var(--card));box-shadow:0 0 0 1px var(--acc),0 10px 30px rgba(91,157,255,.18)}
+.stage.done{border-color:rgba(55,211,154,.5)}
+.stage .num{font-size:11px;font-weight:800;color:var(--tt)}
+.stage .nm{font-size:13.5px;font-weight:750;margin:4px 0}
+.stage .ot{font-size:11.5px;color:var(--ts);min-height:30px}
+.stage .tick{position:absolute;top:10px;right:10px;color:var(--ok);opacity:0;transition:.3s;font-weight:800}
+.stage.done .tick{opacity:1}
+
+/* SIMULATOR */
+.sim{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-top:18px}
+.sim .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.btn{border:1px solid var(--line2);background:var(--card2);color:var(--tp);font-weight:700;font-size:13.5px;
+  padding:10px 18px;border-radius:11px;cursor:pointer;transition:.18s}
+.btn:hover{border-color:var(--acc);transform:translateY(-1px)}
+.btn.pri{background:var(--grad);border:none;color:#fff}
+.btn.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.verdict{margin-top:16px;padding:16px 18px;border-radius:14px;font-weight:700;display:none}
+.verdict.show{display:block;animation:pop .35s}
+@keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.verdict.approve{background:rgba(55,211,154,.12);border:1px solid rgba(55,211,154,.4);color:var(--ok)}
+.verdict.review{background:rgba(255,180,61,.12);border:1px solid rgba(255,180,61,.4);color:var(--warn)}
+.verdict.reject{background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.4);color:var(--bad)}
+.verdict small{display:block;color:var(--ts);font-weight:500;margin-top:6px;font-size:13px}
+.bar{height:7px;background:var(--card2);border-radius:10px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--grad);transition:width .5s}
+
+/* ACCORDION */
+.acc{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:10px;background:var(--card)}
+.acc .hd{padding:15px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:700;font-size:15px}
+.acc .hd .chev{transition:.25s;color:var(--tt)}
+.acc.open .hd .chev{transform:rotate(90deg)}
+.acc .bd{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.acc .bd .inner{padding:0 18px 18px}
+
+/* FOOTER */
+footer{padding:46px 0 70px;text-align:center;color:var(--tt);font-size:13px;border-top:1px solid var(--line)}
+.dlbar{position:fixed;right:18px;bottom:18px;z-index:60}
+.dlbar button{background:var(--grad);border:none;color:#fff;font-weight:750;font-size:13.5px;padding:12px 18px;border-radius:30px;cursor:pointer;box-shadow:0 10px 30px rgba(91,108,255,.4)}
+.toptag{font-size:12px;color:var(--tt);margin-top:6px}
+.callout{background:linear-gradient(180deg,rgba(139,108,255,.10),rgba(91,157,255,.04));border:1px solid var(--line2);border-radius:16px;padding:22px;margin-top:22px}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="brand">◆ LOIP</span>
+  <a class="lnk" href="#problem">Problem</a>
+  <a class="lnk" href="#data">Data</a>
+  <a class="lnk" href="#arch">Architecture</a>
+  <a class="lnk" href="#sim">Live Pipeline</a>
+  <a class="lnk" href="#models">Models</a>
+  <a class="lnk" href="#wrappers">Wrappers</a>
+  <a class="lnk" href="#gaps">Gaps &amp; Roadmap</a>
+  <a class="lnk" href="#summary">Summary</a>
+</div></nav>
+
+<header><div class="wrap">
+  <span class="kick">Loan Onboarding Intelligence Platform</span>
+  <h1>Verify the borrower.<br><span class="g">Reconstruct the truth.</span></h1>
+  <p class="sub">An end-to-end AI system that automates KYC, income reconciliation, fraud detection and a defensible APPROVE / REVIEW / REJECT decision — with every figure traced to its source document.</p>
+  <div class="stats">
+    <div class="stat"><b>8</b><span>PIPELINE STAGES</span></div>
+    <div class="stat"><b>11</b><span>ML MODEL WRAPPERS</span></div>
+    <div class="stat"><b>6</b><span>DOCUMENT TYPES</span></div>
+    <div class="stat"><b>25</b><span>LABELLED TEST CASES</span></div>
+  </div>
+</div></header>
+
+<!-- PROBLEM -->
+<section id="problem"><div class="wrap">
+  <div class="eyebrow">01 — The Problem</div>
+  <h2>The slowest, most fraud-exposed step in lending</h2>
+  <p class="lead">The front door of every loan is manual: a team checks IDs against the application by hand, eyeballs pay stubs in a dozen formats, and computes affordability on a calculator. It's slow enough to kill conversion, error-prone, and the prime entry point for fraud.</p>
+  <div class="grid g2">
+    <div class="card"><div class="ico">🪪</div><h4>Who is the borrower?</h4><p>Extract from ID documents, cross-check against the application, flag tampering or identity mismatch (KYC).</p></div>
+    <div class="card"><div class="ico">💸</div><h4>Can they afford it?</h4><p>Reconstruct true income from messy income documents, detect manipulation, compute a defensible debt-to-income figure.</p></div>
+    <div class="card"><div class="ico">🎯</div><h4>What's the decision?</h4><p>Produce an overall onboarding risk score with an APPROVE / REVIEW / REJECT recommendation.</p></div>
+    <div class="card"><div class="ico">🔍</div><h4>Why this decision?</h4><p>Every number traced to its source document — explainable to both the bank officer and the applicant.</p></div>
+  </div>
+</div></section>
+
+<!-- DATA -->
+<section id="data"><div class="wrap">
+  <div class="eyebrow">02 — The Data</div>
+  <h2>Documents in, structured truth out</h2>
+  <p class="lead">Six Indian document types feed the pipeline. A 25-document labelled corpus (<code>annotation_sample25</code>) drives the demo test suite — covering both clean and adversarial scenarios.</p>
+  <div class="scroll"><table class="tbl">
+    <tr><th>Document</th><th>Key fields extracted</th></tr>
+    <tr><td>PAN Card</td><td>PAN number, full name, date of birth</td></tr>
+    <tr><td>Aadhaar (front)</td><td>Aadhaar number, name, DOB, gender, address</td></tr>
+    <tr><td>Salary Slip</td><td>Employer, employee, basic pay, HRA, deductions, net pay (12 fields)</td></tr>
+    <tr><td>Bank Statement</td><td>Account holder, account no., IFSC, salary credit transactions</td></tr>
+    <tr><td>ITR / Form 16</td><td>PAN, total income, tax year, employer PAN</td></tr>
+    <tr><td>GST Return</td><td>GSTIN, turnover B2B / B2C (self-employed)</td></tr>
+  </table></div>
+
+  <h3>Test corpus &amp; results</h3>
+  <div class="grid g4">
+    <div class="card"><div class="ico">✅</div><h4>14 positive</h4><p>Clean genuine documents — <b>14/14</b> primary field present.</p></div>
+    <div class="card"><div class="ico">🎯</div><h4>9 exact match</h4><p>Verbatim OCR match (rest limited by Aadhaar masking / I↔1).</p></div>
+    <div class="card"><div class="ico">⚠️</div><h4>11 negative</h4><p>Adversarial documents across 6 tamper types.</p></div>
+    <div class="card"><div class="ico">🧪</div><h4>Qwen2.5-VL</h4><p>Run live through Ollama, JSON report saved.</p></div>
+  </div>
+  <h3>Tamper types covered</h3>
+  <div>
+    <span class="pill bad">document_forgery</span>
+    <span class="pill bad">synthetic_identity</span>
+    <span class="pill bad">identity_mismatch</span>
+    <span class="pill warn">income_inflation</span>
+    <span class="pill warn">income_deflation</span>
+    <span class="pill warn">missing_fields</span>
+  </div>
+</div></section>
+
+<!-- ARCHITECTURE -->
+<section id="arch"><div class="wrap">
+  <div class="eyebrow">03 — Architecture</div>
+  <h2>Three layers, eight stages</h2>
+  <p class="lead">A FastAPI web layer routes to an 8-stage <code>OnboardingPipeline</code>. Each stage feeds the next; every model sits behind a swappable wrapper. Click a stage below to see its output.</p>
+
+  <div class="flow" id="flow"></div>
+  <div class="card" id="stageInfo" style="margin-top:14px;display:none"></div>
+
+  <h3>Infrastructure stack</h3>
+  <div class="grid g4">
+    <div class="card"><h4>⚡ FastAPI + Uvicorn</h4><p>Async REST API &amp; Jinja2 server-rendered UI.</p></div>
+    <div class="card"><h4>🐘 PostgreSQL 16</h4><p>Decisions, audit, consent records.</p></div>
+    <div class="card"><h4>🪣 MinIO</h4><p>11 buckets, one per document type.</p></div>
+    <div class="card"><h4>📨 Apache Kafka</h4><p>8 async domain-event topics.</p></div>
+    <div class="card"><h4>🕸️ Neo4j 5</h4><p>Identity graph for fraud-ring detection.</p></div>
+    <div class="card"><h4>🦙 Ollama</h4><p>Serves <code>qwen2.5vl:3b</code> locally.</p></div>
+    <div class="card"><h4>📊 MLflow</h4><p>Versioned model checkpoints.</p></div>
+    <div class="card"><h4>🐳 Docker Compose</h4><p>Full stack, one command.</p></div>
+  </div>
+</div></section>
+
+<!-- SIMULATOR -->
+<section id="sim"><div class="wrap">
+  <div class="eyebrow">04 — Try It</div>
+  <h2>Live decision simulator</h2>
+  <p class="lead">Pick an applicant profile, then run the pipeline. Watch each stage light up and see how the signals combine into a final decision — the same logic the real risk engine uses.</p>
+  <div class="sim">
+    <div class="row" id="profiles"></div>
+    <div class="row">
+      <button class="btn pri" id="runBtn">▶ Run pipeline</button>
+      <button class="btn" id="resetBtn">↺ Reset</button>
+    </div>
+    <div class="flow" id="simFlow"></div>
+    <div class="bar"><i id="prog"></i></div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+</div></section>
+
+<!-- MODELS -->
+<section id="models"><div class="wrap">
+  <div class="eyebrow">05 — The Models</div>
+  <h2>11 models, each with one job</h2>
+  <p class="lead">Filter by layer to see which model does what, and why.</p>
+  <div class="row" id="modelFilter" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+  <div class="grid g3" id="modelGrid"></div>
+</div></section>
+
+<!-- WRAPPERS -->
+<section id="wrappers"><div class="wrap">
+  <div class="eyebrow">06 — Concept</div>
+  <h2>What is a "wrapper"?</h2>
+  <p class="lead">A wrapper is a class that hides one ML model or external service behind a uniform interface the pipeline can call without knowing the details. Every wrapper honours the same contract — and a single flag swaps fake data for real inference.</p>
+  <div class="callout">
+<pre style="margin:0;overflow-x:auto;font-size:13px;color:#cfe0ff;line-height:1.7"><code>class SomeModelWrapper:
+    def __init__(self, mock_mode=True):
+        # mock_mode=True  → deterministic fake data (no GPU, no keys, instant)
+        # mock_mode=False → load real model / call real API
+        ...
+    def predict(self, x):
+        if self.mock_mode:
+            return FakeResult(...)        # always works, reproducible
+        return real_model.predict(x)      # real inference</code></pre>
+  </div>
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card"><div class="ico">🧩</div><h4>Uniform interface</h4><p>The pipeline calls every model the same way; internals differ, calling code never changes.</p></div>
+    <div class="card"><div class="ico">🔌</div><h4>One-flag swap</h4><p><code>mock → ollama → hf</code>. Qwen auto-detects Ollama at startup and degrades gracefully.</p></div>
+    <div class="card"><div class="ico">💻</div><h4>Runs anywhere</h4><p>Full pipeline runs on a laptop with no GPU, no API keys, no external services.</p></div>
+  </div>
+</div></section>
+
+<!-- GAPS & ROADMAP -->
+<section id="gaps"><div class="wrap">
+  <div class="eyebrow">07 — Honest Status</div>
+  <h2>What's pending &amp; how to close it</h2>
+  <p class="lead">Overall completion is <b>~62%</b> by repository evidence. The gap between demo and production is primarily <b>data and credentials</b> — not architecture. Expand each item.</p>
+  <div id="gapAcc"></div>
+</div></section>
+
+<!-- SUMMARY -->
+<section id="summary"><div class="wrap">
+  <div class="eyebrow">08 — Conclusion</div>
+  <h2>Summary</h2>
+  <p class="lead">LOIP replaces a 3–5 day manual onboarding process with a sub-minute automated pipeline that reads documents, verifies identity, reconstructs income, scores fraud, decides, and explains itself — every number traceable to its source.</p>
+  <div class="grid g2">
+    <div class="card"><h4>✅ Achieved in the demo</h4><p>
+      <span class="pill ok">Single-URL workflow</span>
+      <span class="pill ok">Real Qwen2.5-VL extraction</span>
+      <span class="pill ok">PDF upload + conversion</span>
+      <span class="pill ok">File-vs-form cross-check</span>
+      <span class="pill ok">Shared review queue</span>
+      <span class="pill ok">Customer status page</span>
+      <span class="pill ok">25-case test suite</span>
+    </p></div>
+    <div class="card"><h4>🧭 Conclusion</h4><p>The architecture is sound: the wrapper pattern makes every model swappable, the evidence-chain schema guarantees traceability, and the 8-stage pipeline cleanly separates concerns. Fine-tuning scripts, MLflow registry, Docker stack and migrations are all already in place — production is a matter of real data and live credentials.</p></div>
+  </div>
+  <div class="callout" style="text-align:center">
+    <h3 style="margin-top:0">From demo to production</h3>
+    <p style="color:var(--ts);max-width:640px;margin:0 auto">Train models on real loan data · connect NSDL / UIDAI / CIBIL sandboxes · parse real obligations · grow the labelled corpus. The scaffolding for all of it already exists.</p>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <div class="brand" style="font-size:18px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">◆ LOIP</div>
+  <div class="toptag">Loan Onboarding Intelligence Platform · Interactive Project Briefing · Self-contained HTML — works offline</div>
+</div></footer>
+
+<div class="dlbar"><button id="dlBtn">⬇ Download this page</button></div>
+
+<script>
+/* ---------- PIPELINE DATA ---------- */
+const STAGES=[
+ {n:"Document Intelligence",o:"Classified doc type + extracted fields",d:"LayoutLMv3 classifies the document, dual OCR (PaddleOCR → Surya) reads text, then Qwen2.5-VL → Donut extract structured fields per document."},
+ {n:"Identity Trust",o:"Identity confidence + tamper flags",d:"PAN (NSDL) + Aadhaar (UIDAI / Verhoeff) verification, ArcFace face-match, MiniFASNet liveness, and BGE-M3 name cross-check across all documents."},
+ {n:"Income Intelligence",o:"Verified monthly income + confidence",d:"Reconciles income from up to 4 sources (salary slip, ITR, GST, bank credits) using a source-trust weighted average, scored by XGBoost."},
+ {n:"Affordability",o:"FOIR, disposable income, EMI headroom",d:"Computes EMI, FOIR (obligations ÷ income) and disposable income, scored 0–1 by LightGBM."},
+ {n:"Credit Bureau",o:"CIBIL score",d:"Pulls the credit-bureau report (mocked in demo) and normalises the score as a risk feature."},
+ {n:"Fraud Intelligence",o:"Fraud score + signals",d:"Neo4j Cypher rules detect PAN-farming / synthetic-identity / address rings; GraphSAGE adds a learned graph-anomaly score."},
+ {n:"Risk Decisioning",o:"APPROVE / REVIEW / REJECT",d:"An XGBoost ensemble over 7 features produces the three-tier decision with reason codes; hard-reject rules can override."},
+ {n:"Explainability",o:"SHAP + LIME + narrative",d:"SHAP waterfall + LIME token attribution + a Qwen3 plain-English narrative explain every decision."},
+];
+const flow=document.getElementById('flow'),stageInfo=document.getElementById('stageInfo');
+STAGES.forEach((s,i)=>{
+  const el=document.createElement('div');el.className='stage';
+  el.innerHTML='<span class="tick">✓</span><div class="num">STAGE '+(i+1)+'</div><div class="nm">'+s.n+'</div><div class="ot">'+s.o+'</div>';
+  el.onclick=function(){
+    document.querySelectorAll('#flow .stage').forEach(function(x){x.classList.remove('on');});
+    el.classList.add('on');
+    stageInfo.style.display='block';
+    stageInfo.innerHTML='<h4 style="margin-bottom:6px">Stage '+(i+1)+' · '+s.n+'</h4><p style="color:var(--ts);font-size:14px">'+s.d+'</p>';
+  };
+  flow.appendChild(el);
+});
+
+/* ---------- SIMULATOR ---------- */
+const PROFILES=[
+ {k:"Clean salaried",emoji:"👩‍💼",sig:{id:.96,inc:.92,foir:.34,cibil:780,fraud:.08},dec:"approve",
+  why:"Strong identity match, consistent income across sources, low FOIR and a healthy CIBIL score."},
+ {k:"Marginal FOIR",emoji:"🧮",sig:{id:.91,inc:.74,foir:.54,cibil:710,fraud:.18},dec:"review",
+  why:"Affordability is borderline (FOIR 0.54) and income confidence is moderate — sent to a human officer."},
+ {k:"Name mismatch",emoji:"🪪",sig:{id:.52,inc:.80,foir:.40,cibil:690,fraud:.35},dec:"review",
+  why:"BGE-M3 name cross-check disagrees between the form and the PAN — identity confidence drops, needs review."},
+ {k:"Forged income",emoji:"🚩",sig:{id:.74,inc:.41,foir:.66,cibil:640,fraud:.58},dec:"reject",
+  why:"Salary slip net-pay contradicts bank credits (income deflation), FOIR exceeds 0.60 and CIBIL is sub-650."},
+ {k:"Fraud ring",emoji:"🕷️",sig:{id:.60,inc:.70,foir:.45,cibil:700,fraud:.88},dec:"reject",
+  why:"Neo4j flags a shared-device synthetic-identity ring; fraud score > 0.80 triggers a hard reject."},
+];
+const profWrap=document.getElementById('profiles'),simFlow=document.getElementById('simFlow'),
+      verdict=document.getElementById('verdict'),prog=document.getElementById('prog');
+let sel=0,running=false;
+PROFILES.forEach(function(p,i){
+  const b=document.createElement('button');b.className='btn'+(i===0?' sel':'');
+  b.innerHTML=p.emoji+' '+p.k;
+  b.onclick=function(){if(running)return;sel=i;
+    [].forEach.call(profWrap.children,function(c){c.classList.remove('sel');});
+    b.classList.add('sel');resetSim();};
+  profWrap.appendChild(b);
+});
+STAGES.forEach(function(s,i){
+  const el=document.createElement('div');el.className='stage';
+  el.innerHTML='<span class="tick">✓</span><div class="num">STAGE '+(i+1)+'</div><div class="nm">'+s.n+'</div><div class="ot">'+s.o+'</div>';
+  simFlow.appendChild(el);
+});
+function resetSim(){running=false;prog.style.width='0';verdict.className='verdict';
+  [].forEach.call(simFlow.children,function(c){c.classList.remove('done','on');});}
+function runSim(){
+  if(running)return;resetSim();running=true;
+  const p=PROFILES[sel],cells=[].slice.call(simFlow.children);let i=0;
+  const step=function(){
+    if(i>0){cells[i-1].classList.remove('on');cells[i-1].classList.add('done');}
+    if(i<cells.length){cells[i].classList.add('on');prog.style.width=((i+1)/cells.length*100)+'%';i++;setTimeout(step,360);}
+    else{running=false;
+      const lbl={approve:"✅ APPROVE",review:"⚠️ REVIEW",reject:"⛔ REJECT"}[p.dec];
+      verdict.className='verdict show '+p.dec;
+      verdict.innerHTML=lbl+'<small>'+p.why+'</small>'+
+        '<small style="margin-top:8px">Identity '+((p.sig.id*100)|0)+'% · Income '+((p.sig.inc*100)|0)+
+        '% · FOIR '+p.sig.foir+' · CIBIL '+p.sig.cibil+' · Fraud '+((p.sig.fraud*100)|0)+'%</small>';}
+  };step();
+}
+document.getElementById('runBtn').onclick=runSim;
+document.getElementById('resetBtn').onclick=resetSim;
+
+/* ---------- MODELS ---------- */
+const MODELS=[
+ {layer:"Document",nm:"LayoutLMv3",role:"Classifies the document — PAN, Aadhaar, salary slip, bank statement, ITR or GST.",file:"layoutlmv3_wrapper.py"},
+ {layer:"Document",nm:"PaddleOCR",role:"Primary OCR — pixels to text; trusted when confidence is high.",file:"paddleocr_wrapper.py"},
+ {layer:"Document",nm:"Surya OCR",role:"Secondary OCR fallback — runs when PaddleOCR confidence is low.",file:"surya_wrapper.py"},
+ {layer:"Document",nm:"Qwen2.5-VL 3B",role:"Primary field extractor — vision-LLM via Ollama returns structured JSON.",file:"qwen2_5_vl_wrapper.py"},
+ {layer:"Document",nm:"Donut",role:"Secondary field extractor fallback when Qwen confidence is low.",file:"donut_wrapper.py"},
+ {layer:"Identity",nm:"ArcFace",role:"Face matching — selfie vs ID photo, cosine similarity (≥0.60).",file:"arcface_wrapper.py"},
+ {layer:"Identity",nm:"MiniFASNet",role:"Liveness detection — real person vs printed photo / deepfake (≥0.50).",file:"minifasnet_wrapper.py"},
+ {layer:"Identity",nm:"BGE-M3",role:"Name cross-check — embeds form/PAN/Aadhaar names, flags mismatch (<0.85).",file:"bge_m3_wrapper.py"},
+ {layer:"Income/Risk",nm:"XGBoost (Income)",role:"Scores reliability of the source-trust weighted income.",file:"xgboost_wrapper.py"},
+ {layer:"Income/Risk",nm:"LightGBM",role:"Affordability score from FOIR, disposable income, LTI, employment tier.",file:"lightgbm_wrapper.py"},
+ {layer:"Income/Risk",nm:"XGBoost (Risk)",role:"Ensemble over 7 features → APPROVE / REVIEW / REJECT.",file:"xgboost_wrapper.py"},
+ {layer:"Fraud",nm:"GraphSAGE",role:"Graph neural net — anomaly score over the Neo4j identity graph.",file:"graphsage_wrapper.py"},
+ {layer:"Explain",nm:"SHAP + LIME + Qwen3",role:"Feature attribution + plain-English decision narrative.",file:"explainability/processor.py"},
+];
+const LAYERS=["All","Document","Identity","Income/Risk","Fraud","Explain"];
+const mf=document.getElementById('modelFilter'),mg=document.getElementById('modelGrid');
+let activeLayer="All";
+LAYERS.forEach(function(l){
+  const b=document.createElement('button');b.className='btn'+(l==="All"?' sel':'');b.textContent=l;
+  b.onclick=function(){activeLayer=l;[].forEach.call(mf.children,function(c){c.classList.remove('sel');});b.classList.add('sel');renderModels();};
+  mf.appendChild(b);
+});
+function renderModels(){
+  mg.innerHTML='';
+  MODELS.filter(function(m){return activeLayer==="All"||m.layer===activeLayer;}).forEach(function(m){
+    const c=document.createElement('div');c.className='card';
+    c.innerHTML='<span class="pill n">'+m.layer+'</span><h4 style="margin-top:8px">'+m.nm+'</h4><p>'+m.role+'</p>'+
+      '<p style="margin-top:8px"><code>'+m.file+'</code></p>';
+    mg.appendChild(c);
+  });
+}
+renderModels();
+
+/* ---------- GAPS ACCORDION ---------- */
+const GAPS=[
+ {t:"🔴 No production-trained model weights",b:"All 7 ML models run on mock or base pretrained weights — predictions aren't calibrated on real loan data. <b>Fix:</b> collect 500+ real documents, run the existing fine-tuning scripts, register weights in MLflow, flip wrappers to <code>mock_mode=False</code>."},
+ {t:"🔴 No live NSDL / UIDAI / CIBIL endpoints",b:"PAN, Aadhaar and credit checks return mock success. <b>Fix:</b> plug NSDL &amp; UIDAI sandbox credentials into the existing clients; wire a real CIBIL integration."},
+ {t:"🟠 Existing obligations not parsed",b:"FOIR always assumes zero existing EMIs, overstating affordability. <b>Fix:</b> parse recurring debits from the bank-statement transactions and feed the real obligation total into FOIR."},
+ {t:"🟠 Only a 25-sample training corpus",b:"Too small to fine-tune extraction models for Indian documents at scale. <b>Fix:</b> build an annotation pipeline (Label Studio) to label 5,000+ documents."},
+ {t:"🟠 Demo has no database",b:"Applications are stored as local JSON — no search, no pagination, no persistence across restarts. <b>Fix:</b> swap to SQLite using the existing SQLAlchemy models (zero ops)."},
+ {t:"🟡 Contradicting evidence not populated",b:"The evidence schema supports it but processors don't fill it. <b>Fix:</b> when salary-slip net-pay differs from bank credits >15%, populate the contradicting-evidence field."},
+ {t:"🟡 Truth Reconciliation processor is empty",b:"Reconciliation logic lives inline in the income/identity processors. <b>Fix:</b> extract it into the dedicated <code>truth_reconciliation/</code> module for auditability."},
+ {t:"🟡 Hardening: CORS, retries, indexes, versioning",b:"CORS is <code>*</code>, no DB/Kafka retry/backoff, no custom indexes, no API versioning. <b>Fix:</b> lock CORS, add backoff, add queue indexes, prefix routes with <code>/v1/</code>."},
+];
+const ga=document.getElementById('gapAcc');
+GAPS.forEach(function(g){
+  const d=document.createElement('div');d.className='acc';
+  d.innerHTML='<div class="hd"><span>'+g.t+'</span><span class="chev">▸</span></div><div class="bd"><div class="inner" style="color:var(--ts);font-size:14px">'+g.b+'</div></div>';
+  const hd=d.querySelector('.hd'),bd=d.querySelector('.bd');
+  hd.onclick=function(){const open=d.classList.toggle('open');bd.style.maxHeight=open?(bd.firstElementChild.scrollHeight+30)+'px':'0';};
+  ga.appendChild(d);
+});
+
+/* ---------- NAV SCROLLSPY ---------- */
+const links=[].slice.call(document.querySelectorAll('nav a.lnk'));
+const secs=links.map(function(l){return document.querySelector(l.getAttribute('href'));});
+addEventListener('scroll',function(){
+  let cur=0;secs.forEach(function(s,i){if(s&&s.getBoundingClientRect().top<140)cur=i;});
+  links.forEach(function(l){l.classList.remove('active');});
+  if(links[cur])links[cur].classList.add('active');
+});
+
+/* ---------- DOWNLOAD SELF ---------- */
+document.getElementById('dlBtn').onclick=function(){
+  const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='LOIP_Presentation.html';a.click();
+  URL.revokeObjectURL(a.href);
+};
+</script>
+</body>
+</html>

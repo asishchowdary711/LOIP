@@ -109,6 +109,25 @@
   .mismatch{background:#3a2f12;border:1px solid var(--warn);border-radius:8px;padding:9px 12px;
     font-size:.82rem;margin-bottom:7px;color:#f3d9a8;text-align:left}
   .statuslink{display:inline-block;margin-top:14px;color:var(--accent-2);font-size:.85rem;text-decoration:none;font-weight:600}
+  /* Liveness */
+  .liveness{margin-top:8px}
+  .liveness .cam-wrap{position:relative;width:100%;max-width:400px;margin:0 auto;border-radius:14px;overflow:hidden;border:2px solid var(--line);background:#000;aspect-ratio:4/3}
+  .liveness video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .liveness .cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .liveness .face-guide{width:160px;height:200px;border:2.5px dashed var(--faint);border-radius:50%;transition:border-color .3s}
+  .liveness .face-guide.detected{border-color:var(--accent)}
+  .liveness .steps{display:flex;gap:10px;justify-content:center;margin:18px 0 8px;flex-wrap:wrap}
+  .liveness .step{display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font-size:.88rem;font-weight:600;transition:.3s}
+  .liveness .step .circle{width:28px;height:28px;border-radius:50%;border:2px solid var(--faint);display:flex;align-items:center;justify-content:center;font-size:.85rem;transition:.3s;flex:0 0 auto}
+  .liveness .step.active{border-color:var(--accent);background:rgba(22,160,106,.08)}
+  .liveness .step.active .circle{border-color:var(--accent);color:var(--accent)}
+  .liveness .step.done{border-color:var(--ok);background:rgba(22,160,106,.10)}
+  .liveness .step.done .circle{border-color:var(--ok);background:var(--ok);color:#fff}
+  .liveness .hint{text-align:center;font-size:.88rem;color:var(--muted);margin-top:6px;min-height:22px}
+  .liveness .start-cam{margin:16px auto;display:block}
+  .liveness .result-badge{text-align:center;margin:12px 0;font-weight:700;font-size:.95rem}
+  .liveness .result-badge.pass{color:var(--ok)}
+  .liveness .result-badge.fail{color:var(--bad)}
   @media(max-width:720px){.g2,.g3,.uploads,.chips{grid-template-columns:1fr}}
 </style>
 </head>
@@ -154,7 +173,24 @@
         <div class="uploads" id="uploads"></div>
 
         <div class="divider"></div>
-        <div class="footnote" id="footnote">Fill all fields and upload documents to submit</div>
+        <div class="section-title"><span class="sq"></span> Face liveness verification</div>
+        <div class="liveness" id="livenessSection">
+          <div class="steps">
+            <div class="step" id="stepRight"><div class="circle">1</div>Turn right</div>
+            <div class="step" id="stepLeft"><div class="circle">2</div>Turn left</div>
+            <div class="step" id="stepBlink"><div class="circle">3</div>Blink eyes</div>
+          </div>
+          <div class="cam-wrap" id="camWrap" style="display:none">
+            <video id="camVideo" autoplay playsinline muted></video>
+            <div class="cam-overlay"><div class="face-guide" id="faceGuide"></div></div>
+          </div>
+          <div class="hint" id="livenessHint">Click below to start your camera</div>
+          <div class="result-badge" id="livenessResult"></div>
+          <button type="button" class="btn start-cam" id="startCamBtn">Start camera</button>
+        </div>
+
+        <div class="divider"></div>
+        <div class="footnote" id="footnote">Fill all fields, upload documents, and complete liveness check to submit</div>
         <div class="footer">
           <div class="progress"><div class="bar" id="formProgress"></div></div>
           <button type="submit" class="btn" id="submitBtn" disabled>Submit &rarr;</button>
@@ -219,22 +255,127 @@ SLOTS.forEach(s=>{
 const form=document.getElementById('loanForm');
 const submitBtn=document.getElementById('submitBtn');
 const footnote=document.getElementById('footnote');
+let livenessPass=false;
 function formComplete(){
   const fd=new FormData(form);
   for(const[,v]of fd.entries())if(!String(v).trim())return false;
-  return Object.keys(files).length===SLOTS.length;
+  return Object.keys(files).length===SLOTS.length && livenessPass;
 }
 function refresh(){
   const fd=new FormData(form);let filled=0,total=7;
   for(const k of['full_name','mobile_number','pan_number','aadhaar_number','employment_type','monthly_income','loan_amount'])
     if(String(fd.get(k)||'').trim())filled++;
   const docPct=Object.keys(files).length/SLOTS.length;
-  const pct=Math.round(((filled/total)*0.6+docPct*0.4)*100);
+  const livePct=livenessPass?1:0;
+  const pct=Math.round(((filled/total)*0.5+docPct*0.3+livePct*0.2)*100);
   document.getElementById('formProgress').style.width=pct+'%';
   const ok=formComplete();submitBtn.disabled=!ok;
-  footnote.textContent=ok?'Ready to submit':'Fill all fields and upload documents to submit';
+  if(ok) footnote.textContent='Ready to submit';
+  else if(!livenessPass) footnote.textContent='Fill all fields, upload documents, and complete liveness check to submit';
+  else footnote.textContent='Fill all fields and upload documents to submit';
 }
 form.addEventListener('input',refresh);
+
+/* ---------- liveness detection ---------- */
+const camVideo=document.getElementById('camVideo');
+const camWrap=document.getElementById('camWrap');
+const startCamBtn=document.getElementById('startCamBtn');
+const faceGuide=document.getElementById('faceGuide');
+const livenessHint=document.getElementById('livenessHint');
+const livenessResult=document.getElementById('livenessResult');
+const stepRight=document.getElementById('stepRight');
+const stepLeft=document.getElementById('stepLeft');
+const stepBlink=document.getElementById('stepBlink');
+
+const LIVENESS_STEPS=['right','left','blink'];
+const YAW_THRESH=18;
+const EAR_BLINK=0.21;
+let liveStep=0;
+let camStream=null;
+let liveInterval=null;
+let sending=false;
+let blinkConfirmed=0;
+let eyeWasOpen=true;
+
+startCamBtn.addEventListener('click',async()=>{
+  if(livenessPass)return;
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:480},height:{ideal:360}}});
+    camVideo.srcObject=camStream;
+    camWrap.style.display='block';
+    startCamBtn.style.display='none';
+    liveStep=0;blinkConfirmed=0;eyeWasOpen=true;
+    updateStepUI();
+    liveInterval=setInterval(sendFrame,350);
+  }catch(e){
+    livenessHint.textContent='Camera access denied — please allow camera';
+  }
+});
+
+function updateStepUI(){
+  [stepRight,stepLeft,stepBlink].forEach((el,i)=>{
+    el.classList.remove('active','done');
+    if(i<liveStep)el.classList.add('done'),el.querySelector('.circle').textContent='✓';
+    else if(i===liveStep)el.classList.add('active');
+  });
+  const hints=['Turn your head to the RIGHT','Now turn your head to the LEFT','Blink your eyes slowly'];
+  if(liveStep<3) livenessHint.textContent=hints[liveStep];
+}
+
+async function sendFrame(){
+  if(sending||livenessPass||liveStep>=3)return;
+  sending=true;
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=camVideo.videoWidth||480;
+    canvas.height=camVideo.videoHeight||360;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(camVideo,0,0,canvas.width,canvas.height);
+    const dataUrl=canvas.toDataURL('image/jpeg',0.7);
+
+    const resp=await fetch('/apply/liveness',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({frame:dataUrl})
+    });
+    const d=await resp.json();
+
+    if(d.face){
+      faceGuide.classList.add('detected');
+
+      if(liveStep===0 && d.yaw < -YAW_THRESH){
+        liveStep=1;updateStepUI();
+      }
+      else if(liveStep===1 && d.yaw > YAW_THRESH){
+        liveStep=2;updateStepUI();
+      }
+      else if(liveStep===2){
+        if(d.ear>=0.24) eyeWasOpen=true;
+        if(eyeWasOpen && d.ear<EAR_BLINK){
+          blinkConfirmed++;eyeWasOpen=false;
+        }
+        if(blinkConfirmed>=1){
+          liveStep=3;
+          livenessComplete();
+        }
+      }
+    }else{
+      faceGuide.classList.remove('detected');
+    }
+  }catch(e){/* network hiccup, retry next tick */}
+  sending=false;
+}
+
+function livenessComplete(){
+  clearInterval(liveInterval);
+  livenessPass=true;
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+  camWrap.style.display='none';
+  [stepRight,stepLeft,stepBlink].forEach(el=>{el.classList.remove('active');el.classList.add('done');el.querySelector('.circle').textContent='✓';});
+  livenessHint.textContent='';
+  livenessResult.className='result-badge pass';
+  livenessResult.textContent='✓ Liveness verified — you are a real person';
+  refresh();
+}
 
 /* ---------- submit + animated processing ---------- */
 const procView=document.getElementById('procView');
