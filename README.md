@@ -50,6 +50,8 @@ Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML
 | **Compliance** | Working | DPDP consent management, PII masking, KFS generation, cooling-off period, AML screening |
 | **MLOps** | Working | Model registry, promotion gates, drift monitoring, retraining triggers |
 | **Demo UI** | Working | Customer-facing loan application at `/apply` with animated processing |
+| **Webcam Liveness Gate** | Working | InsightFace-powered 3-step challenge (turn right → turn left → blink) gates the submit button |
+| **PDF Document Upload** | Working | Upload PDFs directly; backend converts pages via PyMuPDF before OCR |
 
 ## Quick Start
 
@@ -57,6 +59,7 @@ Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML
 
 - Python 3.11+
 - Docker & Docker Compose (for infrastructure services)
+- A webcam (for the in-browser liveness challenge on the demo UI)
 - [Ollama](https://ollama.ai/) (optional, for real document extraction)
 
 ### 1. Start Infrastructure
@@ -99,8 +102,9 @@ Open **http://localhost:8000/apply** in your browser.
 
 **Demo UI Features:**
 - 7-field loan application form (name, mobile, PAN, Aadhaar, employment type, monthly income, loan amount)
-- 4 document upload slots (Aadhaar, PAN, salary slip, bank statement) — accepts image files
+- 4 document upload slots (Aadhaar, PAN, salary slip, bank statement) — accepts **images and PDFs**
 - Animated 4-stage per-document processing (Uploading → OCR → Extracting → Validating)
+- **Webcam liveness challenge** powered by InsightFace (`buffalo_l` model): turn right → turn left → blink — submit is disabled until all 3 steps pass
 - Real-time approve/review/reject decision banner
 - Application data stored as JSON in `loip/data/demo_applications/` (no database required for demo)
 
@@ -108,6 +112,8 @@ Open **http://localhost:8000/apply** in your browser.
 - **http://localhost:8000/ui** — Admin dashboard with review queue statistics
 - **http://localhost:8000/ui/queue** — Human review queue
 - **http://localhost:8000/docs** — OpenAPI/Swagger interactive documentation
+
+> **Interactive Presentation:** Open `LOIP_Presentation.html` in any browser for a self-contained slide deck covering the full platform architecture, pipeline stages, and demo walkthrough — no server required.
 
 ### 6. Enable Real Document Verification (Optional)
 
@@ -133,6 +139,7 @@ When `LOIP_DEMO_REAL_MODELS=1` is set, document extraction uses the real Qwen2.5
 | `LOIP_QWEN_BACKEND` | `ollama` | Qwen backend: `ollama` or `hf` |
 | `LOIP_OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
 | `LOIP_QWEN_OLLAMA_MODEL` | `qwen2.5vl:3b` | Ollama model name for Qwen |
+| `LOIP_INSIGHTFACE_MODEL` | `buffalo_l` | InsightFace model pack for webcam liveness |
 
 ## Project Structure
 
@@ -211,6 +218,7 @@ Key API endpoints:
 |----------|--------|-------------|
 | `/apply` | GET | Demo loan application UI |
 | `/apply/submit` | POST | Submit demo application (rate-limited 10/min) |
+| `/liveness` | POST | Webcam frame analysis — returns head yaw + eye-aspect-ratio for liveness challenge |
 | `/onboard` | POST | Full onboarding pipeline (API) |
 | `/review/queue` | GET | Human review queue |
 | `/review/{case_id}/override` | POST | Submit reviewer override |
@@ -245,8 +253,8 @@ Key API endpoints:
 | Surya | Secondary OCR (fallback) | `surya_wrapper.py` | surya-ocr |
 | Donut | Secondary structured extraction | `donut_wrapper.py` | HuggingFace transformers |
 | BGE-M3 | Name/entity similarity | `bge_m3_wrapper.py` | sentence-transformers |
-| ArcFace | Face verification | `arcface_wrapper.py` | insightface |
-| MiniFASNet | Liveness / anti-spoof | `minifasnet_wrapper.py` | custom |
+| ArcFace (InsightFace `buffalo_l`) | Face verification + webcam liveness challenge (yaw + blink) | `arcface_wrapper.py` | insightface |
+| MiniFASNet | Liveness / anti-spoof (pipeline) | `minifasnet_wrapper.py` | custom |
 | XGBoost | Risk scoring + income confidence | `xgboost_wrapper.py` | xgboost |
 | LightGBM | Affordability scoring | `lightgbm_wrapper.py` | lightgbm |
 | GraphSAGE | Graph fraud anomaly detection | `graphsage_wrapper.py` | PyTorch Geometric |
