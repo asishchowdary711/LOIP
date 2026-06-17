@@ -34,39 +34,111 @@ _MOCK_DOB = "01/01/1990"
 
 # (display_name is what the queue/dashboard shows; the underlying extracted
 # identity is always "Mock User" in mock mode.)
+# Scenarios sourced from annotation_sample25 — 20 real test personas covering
+# all three decision outcomes. Employer "Acme Corp" matches the mock salary-slip
+# extractor; "Wrong Corp Pvt Ltd" triggers employer_name_mismatch → REVIEW;
+# full_name "Imposter Name" triggers identity_mismatch → REJECT.
 DEMO_SCENARIOS: list[dict] = [
+    # --- APPROVE: clean docs, tier 1-3, loan ≤ 2L (below V-CIP threshold), FOIR well under 0.50 ---
     {
-        "application_id": "APP-1001", "display_name": "Priya Sharma",
+        "application_id": "APP-AS-001", "display_name": "Leena Vasa",
         "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
-        "full_name": _MOCK_FULL_NAME, "loan_amount": 500_000, "tenure_months": 36,
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
     },
     {
-        "application_id": "APP-1002", "display_name": "Rajesh Kumar",
-        "segment": "self_employed", "employer_tier": 2, "employer_name": "Acme Corp",
-        "full_name": _MOCK_FULL_NAME, "loan_amount": 500_000, "tenure_months": 36,
-    },
-    {
-        "application_id": "APP-1003", "display_name": "Anjali Mehta",
-        "segment": "salaried", "employer_tier": 2, "employer_name": "Wrong Corp Pvt Ltd",
-        "full_name": _MOCK_FULL_NAME, "loan_amount": 500_000, "tenure_months": 36,
-    },
-    {
-        "application_id": "APP-1004", "display_name": "Vikram Singh",
+        "application_id": "APP-AS-002", "display_name": "Sneha Gola",
         "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
-        "full_name": _MOCK_FULL_NAME, "loan_amount": 800_000, "tenure_months": 36,
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
     },
     {
-        "application_id": "APP-1005", "display_name": "Sneha Patel",
+        "application_id": "APP-AS-003", "display_name": "Amol Parekh",
+        "segment": "salaried", "employer_tier": 3, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-004", "display_name": "Kabir Setty",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-005", "display_name": "Luke Ahluwalia",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-006", "display_name": "Anamika Bath",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-007", "display_name": "Charles Sodhi",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-008", "display_name": "Dakshesh Madan",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-009", "display_name": "Azad Walla",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 150_000, "tenure_months": 36,
+    },
+    # --- REVIEW: soft flags (employer mismatch / high tier / marginal FOIR) ---
+    {
+        "application_id": "APP-AS-010", "display_name": "George Vala",
+        "segment": "salaried", "employer_tier": 4, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 500_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-011", "display_name": "Aayush Deshmukh",
         "segment": "salaried", "employer_tier": 5, "employer_name": "Acme Corp",
         "full_name": _MOCK_FULL_NAME, "loan_amount": 500_000, "tenure_months": 36,
     },
     {
-        "application_id": "APP-1006", "display_name": "Arjun Nair",
+        "application_id": "APP-AS-012", "display_name": "Ishanvi Vyas",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Wrong Corp Pvt Ltd",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 500_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-013", "display_name": "Shivansh Cherian",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Wrong Corp Pvt Ltd",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 500_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-014", "display_name": "Yatan Borra",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": _MOCK_FULL_NAME, "loan_amount": 800_000, "tenure_months": 36,
+    },
+    # --- REJECT: hard failures (FOIR exceeded / identity mismatch / synthetic identity) ---
+    {
+        "application_id": "APP-AS-015", "display_name": "Meera Dey",
         "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
         "full_name": _MOCK_FULL_NAME, "loan_amount": 2_000_000, "tenure_months": 12,
     },
     {
-        "application_id": "APP-1007", "display_name": "Karan Gupta",
+        "application_id": "APP-AS-016", "display_name": "Saksham Mane",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": "Imposter Name", "loan_amount": 500_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-017", "display_name": "Mitali Dash",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": "Imposter Name", "loan_amount": 500_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-018", "display_name": "Nayar Isaac",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": "Imposter Name", "loan_amount": 500_000, "tenure_months": 36,
+    },
+    {
+        "application_id": "APP-AS-019", "display_name": "Falak Sankaran",
+        "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
+        "full_name": "Imposter Name", "loan_amount": 2_000_000, "tenure_months": 12,
+    },
+    {
+        "application_id": "APP-AS-020", "display_name": "Champak Hegde",
         "segment": "salaried", "employer_tier": 2, "employer_name": "Acme Corp",
         "full_name": "Imposter Name", "loan_amount": 500_000, "tenure_months": 36,
     },
