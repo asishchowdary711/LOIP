@@ -18,6 +18,9 @@ class FraudSignalType(StrEnum):
     EMPLOYER_SHELL = "employer_shell"
     BEHAVIORAL_ANOMALY = "behavioral_anomaly"
     INCOME_MANIPULATION = "income_manipulation"
+    QR_SIGNATURE_INVALID = "qr_signature_invalid"
+    QR_DATA_MISMATCH = "qr_data_mismatch"
+    QR_TAMPERED = "qr_tampered"
 
 
 class FraudSignal(BaseModel):

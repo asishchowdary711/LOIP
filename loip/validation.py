@@ -1,5 +1,5 @@
-"""Deterministic document-number validation — Aadhaar (Verhoeff) and passport
-MRZ (ICAO Doc 9303) check digits.
+"""Deterministic document-number validation — Aadhaar (Verhoeff), passport
+MRZ (ICAO Doc 9303) check digits, and QR payload parsing helpers.
 
 These are real, model-free checks: they run on extracted/entered values
 regardless of whether the OCR/VLM extraction is mock or real, and back the
@@ -8,6 +8,23 @@ fail``.
 """
 
 from __future__ import annotations
+
+import re
+
+try:
+    from defusedxml.ElementTree import fromstring as _xml_fromstring
+    from defusedxml.ElementTree import ParseError as _XMLParseError
+except ImportError:
+    # defusedxml not installed — fall back to stdlib with a warning.
+    # Only affects environments that haven't run: pip install defusedxml
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "defusedxml not installed; XML parsing of Aadhaar QR payloads uses stdlib "
+        "xml.etree.ElementTree which is vulnerable to entity expansion DoS. "
+        "Install defusedxml for production use."
+    )
+    from xml.etree.ElementTree import fromstring as _xml_fromstring  # noqa: S405
+    from xml.etree.ElementTree import ParseError as _XMLParseError
 
 # --- Verhoeff (Aadhaar) ----------------------------------------------------
 
@@ -106,3 +123,53 @@ def validate_mrz_td3(line2: str) -> bool:
         return mrz_check_digit(composite) == composite_cd
     except (ValueError, IndexError):
         return False
+
+
+# --- QR payload parsing helpers --------------------------------------------
+
+_PAN_PATTERN = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+
+_AADHAAR_XML_FIELD_MAP = {
+    "uid": "uid",
+    "name": "name",
+    "dob": "dob",
+    "gender": "gender",
+    "co": "co",
+    "house": "house",
+    "street": "street",
+    "lm": "lm",
+    "loc": "loc",
+    "vtc": "vtc",
+    "dist": "dist",
+    "state": "state",
+    "pc": "pc",
+    "phone": "phone",
+    "email": "email",
+}
+
+
+def parse_aadhaar_xml_qr(xml_string: str) -> dict[str, str | None]:
+    """Parse a UIDAI Aadhaar Secure QR XML string into a flat field dict.
+
+    The expected root element is ``<PrintLetterBarcodeData>``. All fields
+    are returned as strings or None. No UIDAI API call is made.
+
+    On XML parse failure returns a dict with all values as None.
+    """
+    result: dict[str, str | None] = {k: None for k in _AADHAAR_XML_FIELD_MAP}
+    try:
+        root = _xml_fromstring(xml_string)
+        for attr_name, field_key in _AADHAAR_XML_FIELD_MAP.items():
+            result[field_key] = root.get(attr_name)
+    except _XMLParseError:
+        pass
+    return result
+
+
+def validate_pan_qr_format(pan_number: str) -> bool:
+    """Validate a PAN number against the Income Tax Department format.
+
+    Format: [A-Z]{5}[0-9]{4}[A-Z] (10 chars, uppercase).
+    Whitespace is stripped before matching. No NSDL API call is made.
+    """
+    return bool(_PAN_PATTERN.match(pan_number.strip()))

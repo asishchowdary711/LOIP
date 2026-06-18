@@ -20,6 +20,7 @@ class ExtractionMethod(StrEnum):
     EXPERIAN_API = "experian_api"
     DIGILOCKER = "digilocker"
     HUMAN_ENTRY = "human_entry"
+    QR_DECODE = "qr_decode"
 
 
 class DocumentType(StrEnum):

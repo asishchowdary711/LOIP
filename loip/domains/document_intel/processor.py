@@ -17,6 +17,8 @@ from .schemas import (
     OCR_FALLBACK_THRESHOLD, OCR_CONFLICT_THRESHOLD, EXTRACTION_FALLBACK_THRESHOLD
 )
 
+_QR_ELIGIBLE_CLASSES = {DocumentClass.PAN, DocumentClass.AADHAAR}
+
 logger = logging.getLogger(__name__)
 
 _DOC_CLASS_NAMES = {
@@ -40,6 +42,8 @@ class DocumentIntelligenceProcessor:
         self.secondary_ocr = SuryaOCRWrapper(mock_mode=mock_mode)
         self.primary_extractor = Qwen25VLWrapper(mock_mode=mock_mode)
         self.secondary_extractor = DonutWrapper(mock_mode=mock_mode)
+        # QRTrustProcessor is imported lazily to avoid circular imports
+        self._qr_processor = None
 
     def _classify_via_ollama(self, image: np.ndarray) -> ClassificationResult | None:
         """Ask Qwen2.5-VL via Ollama to classify the document type.
@@ -130,6 +134,21 @@ class DocumentIntelligenceProcessor:
 
         return primary_result if primary_result.mean_confidence > secondary_result.mean_confidence else secondary_result
 
+    def _detect_qr(self, image: np.ndarray, doc_class: DocumentClass):
+        """Detect and decode a QR code if the document class is QR-eligible.
+
+        Returns QRDecodeResult or None. None means either the doc class is
+        not expected to carry a QR, or no QR was found — both are normal.
+        """
+        if doc_class not in _QR_ELIGIBLE_CLASSES:
+            return None
+
+        if self._qr_processor is None:
+            from loip.domains.qr_trust.processor import QRTrustProcessor
+            self._qr_processor = QRTrustProcessor(mock_mode=self.mock_mode)
+
+        return self._qr_processor.detect_and_decode(image)
+
     def extract_fields(self, image: np.ndarray, doc_class: DocumentClass) -> ExtractionResult:
         primary_result = self.primary_extractor.extract_fields(image, doc_class)
 
@@ -157,11 +176,13 @@ class DocumentIntelligenceProcessor:
         classification = self.classify_document(image)
         ocr = self.perform_ocr(image)
         extraction = self.extract_fields(image, classification.document_class)
+        qr = self._detect_qr(image, classification.document_class)
 
         result = {
             "classification": classification,
             "ocr": ocr,
-            "extraction": extraction
+            "extraction": extraction,
+            "qr": qr,
         }
         self._cache[h] = result
         return result

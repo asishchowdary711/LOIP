@@ -37,6 +37,15 @@ dependencies = [
     "numpy>=1.26",
     "pdf2image>=1.17",
 
+    # QR trust verification
+    # NOTE: pyzbar requires the libzbar shared library.
+    #   macOS: brew install zbar
+    #   Debian/Ubuntu: apt-get install libzbar0
+    #   Docker: add to Dockerfile RUN layer before pip install
+    "pyzbar>=0.1.9",
+    "cryptography>=42.0",
+    "defusedxml>=0.7",
+
     # PDF generation (for generators)
     "reportlab>=4.2",
     "fpdf2>=2.7",
