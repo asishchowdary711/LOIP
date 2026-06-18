@@ -246,6 +246,25 @@
       {% for m in record.mismatches %}<div class="flag">{{ m|replace('_',' ')|capitalize }}</div>{% endfor %}
       {% endif %}
 
+      {% if record.extracted_fields %}
+      <div class="sec">Extracted from documents</div>
+      {% for doc_type, fields in record.extracted_fields.items() %}
+        {% if fields %}
+          <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.88rem; color: var(--info); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em;">
+              {{ doc_type|replace('_', ' ')|upper }}
+            </div>
+            {% for name, val in fields.items() %}
+              <div style="display: flex; justify-content: space-between; font-size: 0.9rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                <span style="color: var(--muted); text-transform: capitalize;">{{ name|replace('_', ' ') }}</span>
+                <span style="font-weight: 600; color: var(--text-heading);">{{ val }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+
       <div class="sec">Your application</div>
       <div class="row"><span class="k">Name</span><span class="v">{{ record.form.full_name }}</span></div>
       <div class="row"><span class="k">Loan amount</span><span class="v">₹{{ "{:,.0f}".format(record.form.loan_amount) }}</span></div>

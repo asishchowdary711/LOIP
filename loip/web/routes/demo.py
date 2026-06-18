@@ -59,7 +59,7 @@ def _storage_dir() -> str:
 # (CIBIL/UIDAI/NSDL/DigiLocker), which have no configured endpoints; those stay
 # mocked. The real pipeline is built lazily on first use and cached, and writes
 # review cases into the SAME ReviewProcessor the admin UI reads (review_routes).
-_OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+_OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 _real_pipeline = None
 _ollama_reachable: bool | None = None
 
@@ -173,13 +173,19 @@ def _cross_check(form: dict, extracted: dict[str, dict]) -> list[str]:
     mismatches: list[str] = []
     typed_pan = _normalize(form.get("pan_number", ""))
     read_pan = _normalize(extracted.get("pan", {}).get("pan_number", ""))
-    if typed_pan and read_pan and typed_pan != read_pan:
-        mismatches.append(f"PAN on document ({read_pan}) does not match the PAN you entered ({typed_pan}).")
+    if typed_pan:
+        if not read_pan:
+            mismatches.append("Could not extract PAN number from the uploaded PAN document.")
+        elif typed_pan != read_pan:
+            mismatches.append(f"PAN on document ({read_pan}) does not match the PAN you entered ({typed_pan}).")
 
     typed_aadhaar = _normalize(form.get("aadhaar_number", "")).replace("-", "")
     read_aadhaar = _normalize(extracted.get("aadhaar", {}).get("aadhaar_number", "")).replace("-", "")
-    if typed_aadhaar and read_aadhaar and typed_aadhaar != read_aadhaar:
-        mismatches.append("Aadhaar number on document does not match the number you entered.")
+    if typed_aadhaar:
+        if not read_aadhaar:
+            mismatches.append("Could not extract Aadhaar number from the uploaded Aadhaar document.")
+        elif typed_aadhaar != read_aadhaar:
+            mismatches.append(f"Aadhaar number on document ({read_aadhaar}) does not match the number you entered ({typed_aadhaar}).")
     return mismatches
 
 

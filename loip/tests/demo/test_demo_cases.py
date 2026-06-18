@@ -45,7 +45,7 @@ from loip.domains.document_intel.schemas import DocumentClass
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "annotation_sample25"
 REPORT_PATH = Path(__file__).resolve().parent / "demo_test_results.json"
-OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 
 
 def _ollama_up() -> bool:

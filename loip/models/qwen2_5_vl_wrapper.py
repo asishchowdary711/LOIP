@@ -16,7 +16,7 @@ DEFAULT_MODEL = "Qwen/Qwen2.5-VL-3B-Instruct"
 # Ollama backend defaults. Ollama serves a quantized Qwen2.5-VL locally and is
 # far cheaper than downloading the full HF weights — when it's running, real
 # mode prefers it. Override via env.
-OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_HOST = os.getenv("LOIP_OLLAMA_HOST", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("LOIP_QWEN_OLLAMA_MODEL", "qwen2.5vl:3b")
 
 # Confidence when the model returns a complete, well-formed JSON object
