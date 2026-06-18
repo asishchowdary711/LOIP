@@ -2,7 +2,7 @@
 
 **An end-to-end AI-powered personal loan onboarding system for the Indian market.**
 
-LOIP ingests identity documents (PAN, Aadhaar, salary slips, bank statements, ITR, GST returns), verifies applicant identity against government databases (NSDL, UIDAI), reconciles income from multiple sources, assesses affordability, detects fraud through graph analysis, and produces an explainable approve/review/reject decision — all within a single async pipeline backed by 11 ML model wrappers and 12 domain processors.
+LOIP ingests identity documents (PAN, Aadhaar, salary slips, bank statements, ITR, GST returns), verifies applicant identity against government databases (NSDL, UIDAI), reconciles income from multiple sources, assesses affordability, detects fraud through graph analysis, and produces an explainable approve/review/reject decision — all within a single async pipeline backed by 11 ML model wrappers and 13 domain processors.
 
 Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML screening.
 
@@ -19,17 +19,18 @@ Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML
             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   OnboardingPipeline                             │
-│  8 domain processors executed sequentially with evidence chains  │
+│  9 domain processors executed sequentially with evidence chains  │
 └───┬───────┬────────┬──────────┬────────┬────────┬──────────┬────┘
     │       │        │          │        │        │          │
     ▼       ▼        ▼          ▼        ▼        ▼          ▼
- Doc      Identity  Income   Afford-  Bureau   Fraud   Explain-
- Intel    Trust     Intel    ability  (CIBIL)  Intel   ability
+ Doc      QR       Identity  Income   Afford-  Fraud   Explain-
+ Intel    Trust    Trust     Intel    ability  Intel   ability
     │       │        │          │        │        │          │
     ▼       ▼        ▼          ▼        ▼        ▼          ▼
- 5 ML     BGE-M3   XGBoost  LightGBM  HTTP    Graph-   SHAP/
- models   ArcFace                     Client   SAGE     LIME
-          MiniFAS                              Neo4j    Copilot
+ 5 ML   pyzbar/  BGE-M3   XGBoost  LightGBM Graph-   SHAP/
+ models  OpenCV  ArcFace                    SAGE     LIME
+         UIDAI   MiniFAS                    Neo4j    Copilot
+         RSA-2048
 ```
 
 ## Key Features
@@ -38,6 +39,7 @@ Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML
 |---------|--------|-------------|
 | **Document Intelligence** | Working | LayoutLMv3 classification → PaddleOCR + Surya dual-OCR → Qwen2.5-VL + Donut extraction |
 | **Real Document Verification** | Working | Ollama backend for Qwen2.5-VL (`qwen2.5vl:3b`) — genuinely reads uploaded documents |
+| **QR Trust Verification** | Working | pyzbar + OpenCV QR decode → UIDAI RSA-2048 signature verification → QR↔OCR cross-check → ELA + EXIF tampering detection |
 | **Identity Trust** | Working | PAN/NSDL verification, Aadhaar Verhoeff checksum, ArcFace face matching, MiniFASNet liveness |
 | **Income Intelligence** | Working | Multi-source reconciliation (salary slip, bank statement, ITR, GST) with source-trust weighting |
 | **Affordability Assessment** | Working | EMI calculation, FOIR analysis, disposable income, LightGBM scoring |
@@ -78,6 +80,15 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+
+> **QR Trust dependencies** — pyzbar requires the `libzbar` system library:
+> ```bash
+> # macOS
+> brew install zbar
+> # Debian / Ubuntu
+> sudo apt-get install libzbar0
+> # Docker — add before pip install in your RUN layer
+> ```
 
 ### 3. Run Database Migrations
 
@@ -140,14 +151,23 @@ When `LOIP_DEMO_REAL_MODELS=1` is set, document extraction uses the real Qwen2.5
 | `LOIP_OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
 | `LOIP_QWEN_OLLAMA_MODEL` | `qwen2.5vl:3b` | Ollama model name for Qwen |
 | `LOIP_INSIGHTFACE_MODEL` | `buffalo_l` | InsightFace model pack for webcam liveness |
+| `UIDAI_PUBLIC_KEY_PATH` | `loip/keys/uidai_public_key.pem` | Path to UIDAI RSA-2048 public key for Aadhaar QR signature verification |
+| `QR_NAME_SIMILARITY_THRESHOLD` | `0.80` | Minimum name similarity score (QR vs OCR) |
+| `QR_ADDRESS_SIMILARITY_THRESHOLD` | `0.70` | Minimum address similarity score (QR vs OCR) |
 
 ## Project Structure
 
 ```
 loip/
-├── domains/                    # 12 domain processors
+├── domains/                    # 13 domain processors
 │   ├── document_intel/         #   LayoutLMv3 + PaddleOCR + Surya + Qwen2.5-VL + Donut
-│   ├── identity_trust/         #   PAN/Aadhaar verification, face match, liveness
+│   ├── qr_trust/               #   QR Trust Verification — pyzbar/OpenCV decode, UIDAI RSA sig, ELA+EXIF tamper
+│   │   ├── processor.py        #     Orchestrator (detect → parse → verify → cross-check → score)
+│   │   ├── aadhaar_qr.py       #     UIDAI Secure QR zlib+XML parser + RSA-2048 signature verifier
+│   │   ├── pan_qr.py           #     Income Tax Dept PAN QR Base64/pipe-delimited parser
+│   │   ├── tampering.py        #     ELA (PIL re-save diff) + EXIF metadata tampering detector
+│   │   └── schemas.py          #     QRTrustResult, AadhaarQRData, PANQRData, QRTrustFlag …
+│   ├── identity_trust/         #   PAN/Aadhaar verification, face match, liveness + QR trust integration
 │   ├── income_intel/           #   Multi-source income reconciliation
 │   ├── affordability/          #   EMI, FOIR, disposable income analysis
 │   ├── fraud/                  #   Neo4j graph fraud + GraphSAGE anomaly
@@ -158,6 +178,8 @@ loip/
 │   ├── truth_reconciliation/   #   Cross-source field reconciliation
 │   ├── mlops/                  #   Model registry, drift monitoring
 │   └── evidence/               #   Evidence chain schemas
+├── keys/
+│   └── uidai_public_key.pem    #   UIDAI RSA-2048 public key placeholder (replace with real key)
 ├── models/                     # 11 ML model wrappers (mock + real backends)
 │   ├── qwen2_5_vl_wrapper.py   #   Ollama/HF/mock backends for doc extraction
 │   ├── layoutlmv3_wrapper.py   #   Document classification
@@ -195,7 +217,7 @@ loip/
 ├── events.py                   # Kafka domain event pipeline
 ├── graph.py                    # Neo4j identity graph + fraud ring detection
 ├── storage.py                  # MinIO document storage
-├── validation.py               # Aadhaar Verhoeff + passport MRZ validation
+├── validation.py               # Aadhaar Verhoeff + passport MRZ + QR payload parsing
 ├── evaluate.py                 # CLI pipeline evaluation tool
 ├── docker-compose.yml          # 12 infrastructure services
 └── alembic/                    # Database migrations (2 versions)
@@ -258,6 +280,74 @@ Key API endpoints:
 | XGBoost | Risk scoring + income confidence | `xgboost_wrapper.py` | xgboost |
 | LightGBM | Affordability scoring | `lightgbm_wrapper.py` | lightgbm |
 | GraphSAGE | Graph fraud anomaly detection | `graphsage_wrapper.py` | PyTorch Geometric |
+
+## QR Trust Verification
+
+LOIP includes a dedicated QR Trust Verification Module that runs on every uploaded Aadhaar and PAN card after OCR extraction. It adds a cryptographic and visual integrity layer on top of standard field matching.
+
+### How It Works
+
+```
+Document Upload (Aadhaar / PAN)
+        │
+        ▼
+QR Presence Detection (pyzbar → OpenCV fallback)
+        │
+        ├── No QR → Risk flag: QR_NOT_FOUND
+        │
+        ▼
+QR Decoder → QR type classification (Secure QR / Text QR / PAN QR)
+        │
+        ├── Aadhaar Secure QR ──→ zlib decompress → XML parse → RSA-2048 signature verify
+        ├── PAN QR ─────────────→ Base64 decode → pipe-delimited parse → format regex check
+        │
+        ▼
+QR ↔ OCR Cross-Field Validation
+   • Name (difflib similarity ≥ 0.80)
+   • Date of Birth (exact, normalised for DD/MM/YYYY vs DD-MM-YYYY)
+   • Aadhaar UID last 4 digits (exact)
+   • PAN number (exact)
+   • Address (similarity ≥ 0.70, Aadhaar only)
+        │
+        ▼
+Tampering Detection
+   • ELA (Error Level Analysis) — PIL re-save at 75% quality, pixel diff
+   • EXIF metadata inspection — editing software keywords, GPS strip, dimension mismatch
+   • overall_tampered = ELA anomaly AND EXIF anomaly (both must fire)
+        │
+        ▼
+Trust Score (0.0–1.0) + QRTrustFlag list → merged into IdentityVerificationResult
+```
+
+### Trust Signals and Risk Weights
+
+| Signal | Flag | Trust Deduction |
+|--------|------|----------------|
+| QR not found | `QR_NOT_FOUND` | −0.20 |
+| QR decode failed | `QR_DECODE_FAILED` | −0.20 |
+| Aadhaar RSA signature invalid | `QR_SIGNATURE_INVALID` | −0.35 |
+| Aadhaar RSA signature absent | `QR_SIGNATURE_MISSING` | −0.10 |
+| Any field mismatch (name/DOB/number) | `QR_*_MISMATCH` | −0.10 each |
+| ELA anomaly alone | `QR_ELA_ANOMALY` | −0.10 |
+| EXIF anomaly alone | `QR_EXIF_ANOMALY` | −0.10 |
+| Both ELA + EXIF anomaly | `QR_TAMPERED` | −0.30 |
+
+The final `trust_score` is weighted at 25% of the identity confidence delta, feeding into the XGBoost ensemble risk score.
+
+### Aadhaar Secure QR Signature Verification
+
+UIDAI embeds an RSA-2048 PKCS#1 v1.5 + SHA-256 signature in every Secure QR. To enable real verification:
+
+1. Obtain the official public key from [developer.uidai.gov.in](https://developer.uidai.gov.in)
+2. Place it at `loip/keys/uidai_public_key.pem` (or set `UIDAI_PUBLIC_KEY_PATH` env var)
+
+Without the real key, signature verification is disabled with a warning — the pipeline continues with `signature_valid=False` and a `QR_SIGNATURE_MISSING` flag.
+
+### DPDP Act Compliance
+
+- Aadhaar UID is **masked to the last 4 digits** at parse time and never stored or serialized in full
+- XML parsing uses `defusedxml` to prevent entity expansion DoS attacks
+- The `loip/keys/` directory is in `.gitignore` (except the placeholder stub)
 
 ## Regulatory Compliance
 
