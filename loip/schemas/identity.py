@@ -63,3 +63,9 @@ class IdentityVerificationResult(BaseModel):
 
     def has_flag(self, flag: IdentityFlag) -> bool:
         return flag in self.tamper_flags
+
+
+# QRTrustResult is imported at module level above; rebuild now so Pydantic
+# resolves the deferred annotation before any test or production code
+# instantiates IdentityVerificationResult.
+IdentityVerificationResult.model_rebuild()
