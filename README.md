@@ -4,6 +4,8 @@
 
 LOIP ingests identity documents (PAN, Aadhaar, salary slips, bank statements, ITR, GST returns), verifies applicant identity against government databases (NSDL, UIDAI), reconciles income from multiple sources, assesses affordability, detects fraud through graph analysis, and produces an explainable approve/review/reject decision — all within a single async pipeline backed by 11 ML model wrappers and 13 domain processors.
 
+The platform ships with two frontends: a **Python/Jinja2 demo UI** for the full onboarding pipeline (webcam liveness, document upload, real-time decisioning) and a **React + Express analytics portal** (customer portal, admin console, analytics dashboard, dev sandbox).
+
 Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML screening.
 
 ---
@@ -11,26 +13,33 @@ Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML
 ## Architecture at a Glance
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     FastAPI Web Layer                            │
-│  /apply (Demo UI)  /onboard (API)  /ui (Admin)  /vcip (V-KYC)  │
-└───────────┬─────────────────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   OnboardingPipeline                             │
-│  9 domain processors executed sequentially with evidence chains  │
-└───┬───────┬────────┬──────────┬────────┬────────┬──────────┬────┘
-    │       │        │          │        │        │          │
-    ▼       ▼        ▼          ▼        ▼        ▼          ▼
- Doc      QR       Identity  Income   Afford-  Fraud   Explain-
- Intel    Trust    Trust     Intel    ability  Intel   ability
-    │       │        │          │        │        │          │
-    ▼       ▼        ▼          ▼        ▼        ▼          ▼
- 5 ML   pyzbar/  BGE-M3   XGBoost  LightGBM Graph-   SHAP/
- models  OpenCV  ArcFace                    SAGE     LIME
-         UIDAI   MiniFAS                    Neo4j    Copilot
-         RSA-2048
+┌──────────────────────────────────────────────────────────────────────┐
+│                         Web Layer                                    │
+│                                                                      │
+│  Python/FastAPI (:8000)                 React + Express (:3000/:5000)│
+│  ├── /apply    (Demo UI)                ├── Customer Portal          │
+│  ├── /onboard  (Pipeline API)           ├── Admin Portal             │
+│  ├── /ui       (Admin Review Queue)     ├── Analytics Dashboard      │
+│  ├── /vcip     (V-KYC Video)            ├── Auth Portal              │
+│  └── /docs     (OpenAPI)                └── Dev Sandbox              │
+└────────────┬──────────────────────────────────────┬──────────────────┘
+             │                                      │
+             ▼                                      ▼
+┌─────────────────────────────────┐   ┌────────────────────────────────┐
+│      OnboardingPipeline         │   │   Express Processing Engine    │
+│  13 domain processors with      │   │  14 engines (OCR, classifier,  │
+│  evidence chains + mock_mode    │   │  identity, fraud, risk, etc.)  │
+└──┬──────┬──────┬──────┬──────┬──┘   └────────────────────────────────┘
+   │      │      │      │      │
+   ▼      ▼      ▼      ▼      ▼
+ Doc    QR     Identity Income Fraud    ┌─────────────────────────────┐
+ Intel  Trust  Trust    Intel  Intel    │   Infrastructure (Docker)   │
+   │      │      │        │      │      │  Postgres · MinIO · Kafka   │
+   ▼      ▼      ▼        ▼      ▼      │  Neo4j · Redis · MLflow     │
+ 5 ML  pyzbar  BGE-M3  XGBoost Graph-  │  Prometheus · Grafana       │
+ models OpenCV  ArcFace        SAGE    │  OpenSearch · Ollama        │
+        UIDAI   MiniFAS        Neo4j   └─────────────────────────────┘
+        RSA-2048
 ```
 
 ## Key Features
@@ -54,17 +63,53 @@ Built for RBI Digital Lending Guidelines, DPDP Act 2023 compliance, and PMLA/AML
 | **Demo UI** | Working | Customer-facing loan application at `/apply` with animated processing |
 | **Webcam Liveness Gate** | Working | InsightFace-powered 3-step challenge (turn right → turn left → blink) gates the submit button |
 | **PDF Document Upload** | Working | Upload PDFs directly; backend converts pages via PyMuPDF before OCR |
+| **Analytics Portal** | Working | React + Express dashboard with loan analytics, processing metrics, and report centre |
+| **Customer Portal** | Working | React SPA — apply for loans, upload documents, track status in real time via SSE |
+| **Admin Portal** | Working | React SPA — review applications, approve/reject, request additional docs, bureau & risk drill-down |
+| **Auth System** | Working | JWT-based authentication with role separation (user / admin) |
+| **Dev Sandbox** | Working | React component for testing individual processing engines in isolation |
 
 ## Quick Start
+
+### One-Command Demo
+
+The fastest way to boot the full demo with all dependencies:
+
+```bash
+./start-demo.sh
+```
+
+This single command:
+1. Creates/reuses a Python virtual environment at `loip/.venv`
+2. Installs all Python dependencies (including InsightFace for webcam liveness)
+3. Installs frontend npm dependencies
+4. Kills any stale server processes
+5. Starts the FastAPI backend on **:8000**
+6. Starts the React frontend on **:3000**
+7. Waits for startup and prints all URLs
+8. `Ctrl+C` stops both servers cleanly
+
+Once running, open:
+
+| Screen | URL | Description |
+|--------|-----|-------------|
+| Landing page | http://localhost:8000/ | Entry point — links to customer application and admin console |
+| Loan application | http://localhost:8000/apply | Full demo: form → liveness → doc upload → processing → decision |
+| Admin review queue | http://localhost:8000/ui | Bank-side case review, approve/reject, override workflow |
+| React portal | http://localhost:3000/ | Customer portal, admin portal, analytics, dev sandbox |
+| API docs | http://localhost:8000/docs | OpenAPI/Swagger interactive documentation |
 
 ### Prerequisites
 
 - Python 3.11+
-- Docker & Docker Compose (for infrastructure services)
+- Node.js 18+ and npm (for the React frontend)
+- Docker & Docker Compose (for infrastructure services — optional for demo)
 - A webcam (for the in-browser liveness challenge on the demo UI)
 - [Ollama](https://ollama.ai/) (optional, for real document extraction)
 
-### 1. Start Infrastructure
+### Manual Setup (if not using start-demo.sh)
+
+#### 1. Start Infrastructure (Optional)
 
 ```bash
 cd loip
@@ -73,12 +118,16 @@ docker compose up -d
 
 This starts: PostgreSQL 16, MinIO, Kafka + Zookeeper, Neo4j 5, OpenSearch, Redis 7, MLflow, Prometheus, Grafana, and Ollama.
 
-### 2. Install Python Dependencies
+#### 2. Install Python Dependencies
 
 ```bash
+cd loip
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+
+# For webcam liveness detection
+pip install insightface onnxruntime
 ```
 
 > **QR Trust dependencies** — pyzbar requires the `libzbar` system library:
@@ -90,43 +139,40 @@ pip install -e ".[dev]"
 > # Docker — add before pip install in your RUN layer
 > ```
 
-### 3. Run Database Migrations
+#### 3. Run Database Migrations
 
 ```bash
 cd loip
 alembic upgrade head
 ```
 
-### 4. Start the Server
+#### 4. Start the Backend
 
 ```bash
 # Mock mode (default — no ML weights needed, fast, CI-safe)
-uvicorn loip.web.api:app --reload --host 0.0.0.0 --port 8000
+PYTHONPATH=. uvicorn loip.web.api:app --reload --host 0.0.0.0 --port 8000
 
 # With real document extraction (requires Ollama + qwen2.5vl:3b)
-LOIP_DEMO_REAL_MODELS=1 uvicorn loip.web.api:app --reload --host 0.0.0.0 --port 8000
+LOIP_DEMO_REAL_MODELS=1 PYTHONPATH=. uvicorn loip.web.api:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 5. Access the Demo UI
+#### 5. Start the React Frontend
 
-Open **http://localhost:8000/apply** in your browser.
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-**Demo UI Features:**
-- 7-field loan application form (name, mobile, PAN, Aadhaar, employment type, monthly income, loan amount)
-- 4 document upload slots (Aadhaar, PAN, salary slip, bank statement) — accepts **images and PDFs**
-- Animated 4-stage per-document processing (Uploading → OCR → Extracting → Validating)
-- **Webcam liveness challenge** powered by InsightFace (`buffalo_l` model): turn right → turn left → blink — submit is disabled until all 3 steps pass
-- Real-time approve/review/reject decision banner
-- Application data stored as JSON in `loip/data/demo_applications/` (no database required for demo)
+#### 6. Start the Express Backend (for React portal)
 
-**Other UI endpoints:**
-- **http://localhost:8000/ui** — Admin dashboard with review queue statistics
-- **http://localhost:8000/ui/queue** — Human review queue
-- **http://localhost:8000/docs** — OpenAPI/Swagger interactive documentation
+```bash
+cd backend
+npm install
+npm run dev
+```
 
-> **Interactive Presentation:** Open `LOIP_Presentation.html` in any browser for a self-contained slide deck covering the full platform architecture, pipeline stages, and demo walkthrough — no server required.
-
-### 6. Enable Real Document Verification (Optional)
+### Enable Real Document Verification (Optional)
 
 ```bash
 # Install and start Ollama
@@ -137,12 +183,29 @@ ollama serve &
 ollama pull qwen2.5vl:3b
 
 # Start with real models
-LOIP_DEMO_REAL_MODELS=1 uvicorn loip.web.api:app --reload --port 8000
+LOIP_DEMO_REAL_MODELS=1 PYTHONPATH=. uvicorn loip.web.api:app --reload --port 8000
 ```
 
 When `LOIP_DEMO_REAL_MODELS=1` is set, document extraction uses the real Qwen2.5-VL model via Ollama while keeping external API clients (CIBIL, NSDL, UIDAI) in mock mode.
 
-**Environment variables for model configuration:**
+## Demo UI Walkthrough
+
+The demo at **http://localhost:8000/apply** presents the full customer loan application flow:
+
+1. **Applicant Form** — 7 fields: name, mobile, PAN, Aadhaar, employment type, monthly income, loan amount
+2. **Webcam Liveness Challenge** — InsightFace `buffalo_l` model powers a real-time 3-step challenge:
+   - Turn your head **right** (yaw < −18°)
+   - Turn your head **left** (yaw > +18°)
+   - **Blink** your eyes (eye aspect ratio drops below threshold)
+   - Each step must be completed in sequence; submit is disabled until all 3 pass
+3. **Document Upload** — 4 slots (Aadhaar, PAN, salary slip, bank statement); supports images and PDFs
+4. **Processing Animation** — animated 4-stage per-document pipeline (Uploading → OCR → Extracting → Validating)
+5. **Decision Banner** — real-time approve/review/reject result with confidence score
+6. **Application Tracking** — status page at `/apply/status/{application_id}`
+
+Applications are stored as JSON in `loip/data/demo_applications/` (no database required for demo). Submitted cases automatically appear in the admin review queue at `/ui`.
+
+## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -154,73 +217,100 @@ When `LOIP_DEMO_REAL_MODELS=1` is set, document extraction uses the real Qwen2.5
 | `UIDAI_PUBLIC_KEY_PATH` | `loip/keys/uidai_public_key.pem` | Path to UIDAI RSA-2048 public key for Aadhaar QR signature verification |
 | `QR_NAME_SIMILARITY_THRESHOLD` | `0.80` | Minimum name similarity score (QR vs OCR) |
 | `QR_ADDRESS_SIMILARITY_THRESHOLD` | `0.70` | Minimum address similarity score (QR vs OCR) |
+| `DATABASE_URL` | `postgresql+asyncpg://...` | Database connection string |
+| `PORT` | `5000` | Express backend port |
 
 ## Project Structure
 
 ```
-loip/
-├── domains/                    # 13 domain processors
-│   ├── document_intel/         #   LayoutLMv3 + PaddleOCR + Surya + Qwen2.5-VL + Donut
-│   ├── qr_trust/               #   QR Trust Verification — pyzbar/OpenCV decode, UIDAI RSA sig, ELA+EXIF tamper
-│   │   ├── processor.py        #     Orchestrator (detect → parse → verify → cross-check → score)
-│   │   ├── aadhaar_qr.py       #     UIDAI Secure QR zlib+XML parser + RSA-2048 signature verifier
-│   │   ├── pan_qr.py           #     Income Tax Dept PAN QR Base64/pipe-delimited parser
-│   │   ├── tampering.py        #     ELA (PIL re-save diff) + EXIF metadata tampering detector
-│   │   └── schemas.py          #     QRTrustResult, AadhaarQRData, PANQRData, QRTrustFlag …
-│   ├── identity_trust/         #   PAN/Aadhaar verification, face match, liveness + QR trust integration
-│   ├── income_intel/           #   Multi-source income reconciliation
-│   ├── affordability/          #   EMI, FOIR, disposable income analysis
-│   ├── fraud/                  #   Neo4j graph fraud + GraphSAGE anomaly
-│   ├── risk_decisioning/       #   Rule gates + XGBoost ensemble scoring
-│   ├── explainability/         #   SHAP + LIME + Qwen3 copilot narrative
-│   ├── human_review/           #   Review queue, case assignment, overrides
-│   ├── compliance/             #   DPDP consent, PII masking, KFS, AML
-│   ├── truth_reconciliation/   #   Cross-source field reconciliation
-│   ├── mlops/                  #   Model registry, drift monitoring
-│   └── evidence/               #   Evidence chain schemas
-├── keys/
-│   └── uidai_public_key.pem    #   UIDAI RSA-2048 public key placeholder (replace with real key)
-├── models/                     # 11 ML model wrappers (mock + real backends)
-│   ├── qwen2_5_vl_wrapper.py   #   Ollama/HF/mock backends for doc extraction
-│   ├── layoutlmv3_wrapper.py   #   Document classification
-│   ├── paddleocr_wrapper.py    #   Primary OCR
-│   ├── surya_wrapper.py        #   Secondary OCR (fallback)
-│   ├── donut_wrapper.py        #   Secondary structured extraction
-│   ├── bge_m3_wrapper.py       #   Name/entity similarity embeddings
-│   ├── arcface_wrapper.py      #   Face verification
-│   ├── minifasnet_wrapper.py   #   Liveness / anti-spoofing
-│   ├── xgboost_wrapper.py      #   Risk + income confidence scoring
-│   ├── lightgbm_wrapper.py     #   Affordability scoring
-│   └── graphsage_wrapper.py    #   Graph fraud anomaly detection
-├── integrations/               # External API clients
-│   ├── cibil_client.py         #   Credit bureau
-│   ├── nsdl_client.py          #   PAN verification
-│   ├── uidai_client.py         #   Aadhaar OTP verification
-│   ├── digilocker_client.py    #   DigiLocker document fetch
-│   ├── experian_client.py      #   Alternate bureau
-│   └── mca21_client.py         #   Company verification
-├── pipelines/
-│   └── onboarding.py           # Main orchestration pipeline
-├── schemas/                    # Pydantic models (667 LOC)
-├── web/
-│   ├── api.py                  # FastAPI app with 9 route modules
-│   ├── routes/                 # 10 API route files (1,095 LOC)
-│   └── templates/              # 5 Jinja2 HTML templates
-├── scripts/
-│   ├── training/               # 8 fine-tuning + training scripts
-│   ├── generators/             # 9 synthetic document generators
-│   ├── annotate/               # Annotation pipeline
-│   └── download_datasets.py    # Dataset download with budget control
-├── tests/                      # 21 test files, 111 test functions
-├── config.py                   # Centralized settings (pydantic-settings)
-├── persistence.py              # PostgreSQL async persistence
-├── events.py                   # Kafka domain event pipeline
-├── graph.py                    # Neo4j identity graph + fraud ring detection
-├── storage.py                  # MinIO document storage
-├── validation.py               # Aadhaar Verhoeff + passport MRZ + QR payload parsing
-├── evaluate.py                 # CLI pipeline evaluation tool
-├── docker-compose.yml          # 12 infrastructure services
-└── alembic/                    # Database migrations (2 versions)
+LOIP/
+├── loip/                           # Python backend — 13 domain processors
+│   ├── domains/
+│   │   ├── document_intel/         #   LayoutLMv3 + PaddleOCR + Surya + Qwen2.5-VL + Donut
+│   │   ├── qr_trust/              #   QR Trust Verification — pyzbar/OpenCV, UIDAI RSA, ELA+EXIF
+│   │   │   ├── processor.py       #     Orchestrator (detect → parse → verify → cross-check → score)
+│   │   │   ├── aadhaar_qr.py      #     UIDAI Secure QR zlib+XML parser + RSA-2048 sig verifier
+│   │   │   ├── pan_qr.py          #     PAN QR Base64/pipe-delimited parser
+│   │   │   ├── tampering.py       #     ELA (PIL re-save diff) + EXIF metadata tampering detector
+│   │   │   └── schemas.py         #     QRTrustResult, AadhaarQRData, PANQRData, QRTrustFlag
+│   │   ├── identity_trust/        #   PAN/Aadhaar verification, face match, liveness + QR integration
+│   │   ├── income_intel/          #   Multi-source income reconciliation
+│   │   ├── affordability/         #   EMI, FOIR, disposable income analysis
+│   │   ├── fraud/                 #   Neo4j graph fraud + GraphSAGE anomaly
+│   │   ├── risk_decisioning/      #   Rule gates + XGBoost ensemble scoring
+│   │   ├── explainability/        #   SHAP + LIME + Qwen3 copilot narrative
+│   │   ├── human_review/          #   Review queue, case assignment, overrides
+│   │   ├── compliance/            #   DPDP consent, PII masking, KFS, AML
+│   │   ├── truth_reconciliation/  #   Cross-source field reconciliation
+│   │   ├── mlops/                 #   Model registry, drift monitoring
+│   │   └── evidence/              #   Evidence chain schemas
+│   ├── keys/
+│   │   └── uidai_public_key.pem   #   UIDAI RSA-2048 public key placeholder
+│   ├── models/                    # 11 ML model wrappers (mock + real backends)
+│   ├── integrations/              # External API clients (CIBIL, NSDL, UIDAI, DigiLocker)
+│   ├── pipelines/
+│   │   └── onboarding.py          # Main orchestration pipeline
+│   ├── schemas/                   # Pydantic models
+│   ├── web/
+│   │   ├── api.py                 # FastAPI app with 10 route modules
+│   │   ├── routes/                # demo, onboard, review, admin, audit, consent, vcip, etc.
+│   │   └── templates/             # Jinja2 HTML templates (landing, apply, status, queue, dashboard)
+│   ├── scripts/                   # Training, generators, annotation, dataset tools
+│   ├── tests/                     # 21 test files, 111 test functions
+│   ├── config.py                  # Centralized settings (pydantic-settings)
+│   ├── persistence.py             # PostgreSQL async persistence
+│   ├── events.py                  # Kafka domain event pipeline
+│   ├── graph.py                   # Neo4j identity graph + fraud ring detection
+│   ├── storage.py                 # MinIO document storage
+│   ├── validation.py              # Aadhaar Verhoeff + MRZ + QR payload parsing
+│   ├── docker-compose.yml         # 12 infrastructure services
+│   └── pyproject.toml             # Python project config
+│
+├── frontend/                      # React + Vite SPA (:3000)
+│   └── src/
+│       ├── App.tsx                # Main app — dark theme, auth routing
+│       └── components/
+│           ├── AuthPortal.tsx     # JWT login / register
+│           ├── CustomerPortal.tsx # Apply, upload docs, track status (SSE)
+│           ├── AdminPortal.tsx    # Review queue, approve/reject, bureau drill-down
+│           ├── AnalyticsPortal.tsx# Loan analytics, processing metrics, reports
+│           └── DevSandbox.tsx     # Test individual engines in isolation
+│
+├── backend/                       # Express.js API (:5000)
+│   └── src/
+│       ├── server.ts             # Express app, auth + loan routes
+│       ├── db.ts                 # SQLite database (auto-creates tables)
+│       ├── queue.ts              # Background job queue for async processing
+│       ├── controllers/
+│       │   ├── authController.ts # JWT auth (register, login, profile)
+│       │   └── loanController.ts # Loan CRUD, doc upload, admin actions
+│       ├── engines/
+│       │   ├── index.ts          # Engine orchestrator — runs all 14 engines
+│       │   ├── ocrEngine.ts      # OCR via Python bridge (PyMuPDF + Tesseract)
+│       │   ├── classifier.ts     # Document type classification
+│       │   ├── identity.ts       # Identity cross-verification
+│       │   ├── face.ts           # Face match scoring
+│       │   ├── fraud.ts          # Fraud pattern detection
+│       │   ├── bureau.ts         # Credit bureau simulation
+│       │   ├── bank.ts           # Bank statement analysis
+│       │   ├── income.ts         # Income assessment
+│       │   ├── affordability.ts  # Affordability calculation
+│       │   ├── risk.ts           # Risk scoring
+│       │   ├── decision.ts       # Final decision engine
+│       │   ├── docQA.ts          # Document Q&A
+│       │   └── documentFraudExpert.ts # Document fraud analysis
+│       ├── analytics/            # Analytics controller + router
+│       ├── middleware/
+│       │   └── auth.ts           # JWT middleware
+│       └── utils/
+│           ├── geminiVision.ts   # Gemini Vision API integration
+│           ├── metadataValidator.ts # Document metadata validation
+│           └── crypto.ts         # Encryption utilities
+│
+├── start-demo.sh                  # One-command full demo launcher
+├── LOIP_Presentation.html         # Self-contained slide deck (open in browser)
+├── LOIP_BUILD_PLAN.md             # Detailed build plan document
+└── .github/workflows/ci.yml      # CI: lint, type-check, test, security audit
 ```
 
 ## Running Tests
@@ -230,17 +320,28 @@ cd loip
 DATABASE_URL=sqlite+aiosqlite:///data/dev.db pytest -q
 ```
 
+## CI/CD
+
+GitHub Actions runs on every push to `main` and on pull requests:
+
+- **test** job: ruff lint, mypy type check, pytest (with SQLite fallback)
+- **security** job: pip-audit, bandit, safety check
+- System dependencies (`libzbar0`, `poppler-utils`) are installed automatically in CI
+
 ## API Documentation
 
 With the server running, visit **http://localhost:8000/docs** for the full OpenAPI spec.
 
-Key API endpoints:
+### FastAPI Endpoints (Python Backend — :8000)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/` | GET | Landing page |
 | `/apply` | GET | Demo loan application UI |
 | `/apply/submit` | POST | Submit demo application (rate-limited 10/min) |
-| `/liveness` | POST | Webcam frame analysis — returns head yaw + eye-aspect-ratio for liveness challenge |
+| `/apply/liveness` | POST | Webcam frame analysis — returns yaw + EAR for liveness challenge |
+| `/apply/status/{id}` | GET | Application status page |
+| `/apply/mode` | GET | Current mode (mock vs real models) |
 | `/onboard` | POST | Full onboarding pipeline (API) |
 | `/review/queue` | GET | Human review queue |
 | `/review/{case_id}/override` | POST | Submit reviewer override |
@@ -248,7 +349,23 @@ Key API endpoints:
 | `/vcip/initiate` | POST | Start V-CIP video KYC session |
 | `/compliance/consent` | POST | Record DPDP consent |
 | `/ui` | GET | Admin dashboard |
-| `/health/ready` | GET | Readiness check (all deps) |
+| `/docs` | GET | OpenAPI/Swagger docs |
+
+### Express Endpoints (Node.js Backend — :5000)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/register` | POST | Register new user |
+| `/api/auth/login` | POST | Login (returns JWT) |
+| `/api/auth/profile` | GET | Get user profile |
+| `/api/loans/apply` | POST | Submit loan application with documents |
+| `/api/loans` | GET | List user's loans |
+| `/api/loans/:id` | GET | Get loan details |
+| `/api/admin/applications` | GET | Admin — list all applications |
+| `/api/admin/applications/:id/approve` | POST | Admin — approve application |
+| `/api/admin/applications/:id/reject` | POST | Admin — reject application |
+| `/api/admin/applications/:id/request-docs` | POST | Admin — request additional documents |
+| `/api/analytics/*` | GET | Analytics data endpoints |
 
 ## Infrastructure Services (Docker Compose)
 
@@ -275,7 +392,7 @@ Key API endpoints:
 | Surya | Secondary OCR (fallback) | `surya_wrapper.py` | surya-ocr |
 | Donut | Secondary structured extraction | `donut_wrapper.py` | HuggingFace transformers |
 | BGE-M3 | Name/entity similarity | `bge_m3_wrapper.py` | sentence-transformers |
-| ArcFace (InsightFace `buffalo_l`) | Face verification + webcam liveness challenge (yaw + blink) | `arcface_wrapper.py` | insightface |
+| ArcFace (InsightFace `buffalo_l`) | Face verification + webcam liveness (yaw + blink) | `arcface_wrapper.py` | insightface |
 | MiniFASNet | Liveness / anti-spoof (pipeline) | `minifasnet_wrapper.py` | custom |
 | XGBoost | Risk scoring + income confidence | `xgboost_wrapper.py` | xgboost |
 | LightGBM | Affordability scoring | `lightgbm_wrapper.py` | lightgbm |
