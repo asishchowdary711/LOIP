@@ -1,0 +1,10 @@
+{
+  "name": "digital-loan-platform",
+  "version": "1.0.0",
+  "description": "AI-Powered Loan Origination System",
+  "scripts": {
+    "install:all": "npm.cmd install --prefix backend && npm.cmd install --prefix frontend",
+    "dev:backend": "npm.cmd run dev --prefix backend",
+    "dev:frontend": "npm.cmd run dev --prefix frontend"
+  }
+}
