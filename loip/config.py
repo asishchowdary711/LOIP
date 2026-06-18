@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +36,24 @@ class Settings(BaseSettings):
     # --- Data residency (RBI localization) ---
     data_region: str = "ap-south-1"
     enforce_data_residency: bool = True
+
+    # --- QR Trust Verification ---
+    uidai_public_key_path: str = Field(
+        default="loip/keys/uidai_public_key.pem",
+        description="Path to the UIDAI RSA-2048 public key PEM for Aadhaar Secure QR signature verification.",
+    )
+    qr_name_similarity_threshold: float = Field(
+        default=0.80,
+        ge=0.0,
+        le=1.0,
+        description="Minimum difflib SequenceMatcher ratio for QR name vs OCR name match.",
+    )
+    qr_address_similarity_threshold: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity ratio for QR address vs OCR address match.",
+    )
 
 
 @lru_cache

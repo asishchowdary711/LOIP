@@ -6,9 +6,13 @@ from loip.integrations.uidai_client import UIDAIClient
 from loip.schemas.identity import (
     IdentityVerificationResult, EntityMatch, APIVerificationResult, IdentityFlag
 )
+from loip.domains.qr_trust.processor import QRTrustProcessor
+from loip.domains.qr_trust.schemas import QRTrustFlag
+
 
 class IdentityTrustProcessor:
     def __init__(self, mock_mode: bool = True):
+        self.mock_mode = mock_mode
         self.bge_m3 = BGEM3Wrapper(mock_mode=mock_mode)
         self.arcface = ArcFaceWrapper(mock_mode=mock_mode)
         self.minifasnet = MiniFASNetWrapper(mock_mode=mock_mode)
@@ -16,8 +20,20 @@ class IdentityTrustProcessor:
         self.nsdl_client._mock = mock_mode
         self.uidai_client = UIDAIClient()
         self.uidai_client._mock = mock_mode
+        self.qr_trust_processor = QRTrustProcessor(mock_mode=mock_mode)
 
-    async def verify_identity(self, application_id: str, extracted_fields: dict, application_data: dict, selfie_img=None, doc_face_img=None, document_metadata: dict | None = None) -> IdentityVerificationResult:
+    async def verify_identity(
+        self,
+        application_id: str,
+        extracted_fields: dict,
+        application_data: dict,
+        selfie_img=None,
+        doc_face_img=None,
+        document_metadata: dict | None = None,
+        qr_results: dict | None = None,
+        source_image_bytes: dict | None = None,
+        images_by_class: dict | None = None,
+    ) -> IdentityVerificationResult:
         result = IdentityVerificationResult(application_id=application_id, identity_confidence=1.0)
         
         # 1. API Verification
@@ -109,13 +125,40 @@ class IdentityTrustProcessor:
                 result.tamper_flags.append(IdentityFlag.DOCUMENT_METADATA_ANOMALY)
                 result.mismatches.append("Document metadata indicates editing software (possible tamper)")
 
+        # 5. QR Trust Verification
+        if qr_results is not None:
+            qr_trust_result = self.qr_trust_processor.verify(
+                application_id=application_id,
+                qr_decode_results=qr_results,
+                extracted_fields=extracted_fields,
+                source_image_bytes=source_image_bytes,
+                images_by_class=images_by_class,
+            )
+            result.qr_trust_result = qr_trust_result
+
+            if qr_trust_result.has_flag(QRTrustFlag.QR_SIGNATURE_INVALID):
+                result.tamper_flags.append(IdentityFlag.QR_SIGNATURE_INVALID)
+                result.mismatches.append("Aadhaar QR digital signature invalid")
+            if any(qr_trust_result.has_flag(f) for f in (
+                QRTrustFlag.QR_NAME_MISMATCH,
+                QRTrustFlag.QR_DOB_MISMATCH,
+                QRTrustFlag.QR_ID_NUMBER_MISMATCH,
+            )):
+                result.tamper_flags.append(IdentityFlag.QR_DATA_MISMATCH)
+                result.mismatches.append("QR data does not match OCR-extracted fields")
+            if qr_trust_result.has_flag(QRTrustFlag.QR_TAMPERED):
+                result.tamper_flags.append(IdentityFlag.QR_TAMPERED)
+                result.mismatches.append("Document image shows signs of tampering (ELA + EXIF)")
+
         # Confidence heuristic
         score = 1.0
         if not result.pan_verified: score -= 0.3
         if not result.aadhaar_verified: score -= 0.3
         if selfie_img is not None and not result.face_verified: score -= 0.3
         if result.tamper_flags: score -= 0.2 * len(result.tamper_flags)
-        
+        if result.qr_trust_result is not None:
+            score -= (1.0 - result.qr_trust_result.trust_score) * 0.25
+
         result.identity_confidence = max(0.0, min(1.0, score))
 
         result.evidence_chains = [r.evidence for r in result.api_results if r.evidence is not None]

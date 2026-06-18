@@ -37,6 +37,9 @@ class OnboardingPipeline(BasePipeline):
         pdf_doc_classes = {"salary_slip", "bank_statement", "itr", "form16", "gst_return"}
         extracted_data = {}
         document_ids: dict[str, str] = {}
+        qr_results: dict = {}
+        source_image_bytes_by_class: dict[str, bytes] = {}
+        images_by_class: dict[str, np.ndarray] = {}
         for i, img in enumerate(images):
             doc_result = self.doc_processor.process(img)
             doc_class = doc_result["classification"].document_class.value
@@ -45,11 +48,18 @@ class OnboardingPipeline(BasePipeline):
                 fields[f.name] = f.value
             extracted_data[doc_class] = fields
 
+            # Collect QR decode results for identity trust layer
+            qr_results[doc_class] = doc_result.get("qr")
+            images_by_class[doc_class] = img
+
             # Persist the source document to MinIO and record its id so
             # document-derived evidence can trace back to a real object.
             if document_store is not None and raw_documents is not None and i < len(raw_documents):
                 ext = "pdf" if doc_class in pdf_doc_classes else "png"
                 document_ids[doc_class] = document_store.store(doc_class, raw_documents[i], ext=ext)
+
+            if raw_documents is not None and i < len(raw_documents):
+                source_image_bytes_by_class[doc_class] = raw_documents[i]
 
         await emit(Topic.DOCUMENT_CLASSIFIED, {"document_classes": list(extracted_data.keys())})
 
@@ -61,7 +71,10 @@ class OnboardingPipeline(BasePipeline):
             {**extracted_data.get("pan", {}), **extracted_data.get("aadhaar", {}), **extracted_data.get("passport", {})},
             application_data,
             selfie_img=selfie_img,
-            doc_face_img=doc_face_img
+            doc_face_img=doc_face_img,
+            qr_results=qr_results,
+            source_image_bytes=source_image_bytes_by_class,
+            images_by_class=images_by_class,
         )
         await emit(Topic.IDENTITY_VERIFIED, {
             "identity_confidence": identity_result.identity_confidence,
@@ -119,6 +132,8 @@ class OnboardingPipeline(BasePipeline):
             vcip=vcip,
         )
         decision.fraud_result = fraud_result
+        if identity_result.qr_trust_result is not None:
+            decision.qr_trust_result = identity_result.qr_trust_result
 
         risk_features = {
             "identity_confidence": identity_result.identity_confidence,

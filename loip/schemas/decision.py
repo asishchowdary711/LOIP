@@ -13,6 +13,7 @@ from .evidence import EvidenceChain
 from .fraud import FraudResult
 from .identity import IdentityVerificationResult
 from .income import IncomeResult
+from loip.domains.qr_trust.schemas import QRTrustResult  # noqa: E402
 
 
 class Decision(StrEnum):
@@ -58,6 +59,10 @@ class OnboardingDecision(BaseModel):
     affordability_result: AffordabilityResult
     bureau_result: CreditBureauResult
     fraud_result: FraudResult | None = None
+    qr_trust_result: QRTrustResult | None = Field(
+        default=None,
+        description="Top-level QR trust result; mirrors identity_result.qr_trust_result for convenience",
+    )
     risk_factors: list[str] = Field(default_factory=list, description="Top SHAP contributors (Phase 3)")
     copilot_narrative: str | None = Field(default=None, description="Qwen3 reviewer summary (Phase 3)")
     evidence_chains: list[EvidenceChain] = Field(default_factory=list)

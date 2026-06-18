@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from .evidence import EvidenceChain, ExtractedField
+from loip.domains.qr_trust.schemas import QRTrustResult  # noqa: E402
 
 
 class IdentityFlag(StrEnum):
@@ -20,6 +21,9 @@ class IdentityFlag(StrEnum):
     ADDRESS_STATE_MISMATCH = "address_state_mismatch"
     SPOOF_DETECTED = "spoof_detected"
     FACE_MISMATCH = "face_mismatch"
+    QR_SIGNATURE_INVALID = "qr_signature_invalid"
+    QR_DATA_MISMATCH = "qr_data_mismatch"
+    QR_TAMPERED = "qr_tampered"
 
 
 class APIVerificationResult(BaseModel):
@@ -52,6 +56,10 @@ class IdentityVerificationResult(BaseModel):
     tamper_flags: list[IdentityFlag] = Field(default_factory=list)
     mismatches: list[str] = Field(default_factory=list)
     evidence_chains: list[EvidenceChain] = Field(default_factory=list)
+    qr_trust_result: QRTrustResult | None = Field(
+        default=None,
+        description="QR code trust analysis result (Aadhaar Secure QR + PAN QR)",
+    )
 
     def has_flag(self, flag: IdentityFlag) -> bool:
         return flag in self.tamper_flags

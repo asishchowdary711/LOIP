@@ -57,6 +57,10 @@ mlflow_data/
 grafana_data/
 prometheus_data/
 
+# Cryptographic keys — never commit real keys to version control
+loip/keys/*.pem
+!loip/keys/uidai_public_key.pem
+
 # Test artifacts
 .pytest_cache/
 .coverage
