@@ -141,12 +141,27 @@ class DocumentIntelligenceProcessor:
 
     def process(self, image: np.ndarray) -> dict:
         """End-to-end document processing pipeline."""
+        import hashlib
+        try:
+            h = hashlib.md5(image).hexdigest()
+        except Exception:
+            h = str(id(image))
+
+        if not hasattr(self, "_cache"):
+            self._cache = {}
+
+        if h in self._cache:
+            logger.info("Returning cached document intelligence result for image hash %s", h)
+            return self._cache[h]
+
         classification = self.classify_document(image)
         ocr = self.perform_ocr(image)
         extraction = self.extract_fields(image, classification.document_class)
 
-        return {
+        result = {
             "classification": classification,
             "ocr": ocr,
             "extraction": extraction
         }
+        self._cache[h] = result
+        return result
