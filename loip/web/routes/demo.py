@@ -250,10 +250,51 @@ async def status_page(request: Request, application_id: str):
     """Customer status page. Shows the stored submission and the current
     decision, merging any later action the bank admin took on the case."""
     path = os.path.join(_storage_dir(), f"{application_id}.json")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Application not found")
-    with open(path, encoding="utf-8") as fh:
-        record = json.load(fh)
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            record = json.load(fh)
+    else:
+        case = review_routes.review_processor.get_case_by_application(application_id)
+        if case is None:
+            raise HTTPException(status_code=404, detail="Application not found")
+        
+        decision = case.onboarding_decision
+        decision_payload = {}
+        if decision:
+            if hasattr(decision, "model_dump"):
+                decision_payload = decision.model_dump(mode="json")
+            else:
+                decision_payload = dict(decision)
+        
+        record = {
+            "application_id": case.application_id,
+            "submitted_at": case.created_at.isoformat() if case.created_at else datetime.now(timezone.utc).isoformat(),
+            "form": {
+                "full_name": case.applicant_name,
+                "mobile_number": "",
+                "pan_number": "",
+                "aadhaar_number": "",
+                "employment_type": (decision.income_result.segment if (decision and decision.income_result) else "salaried"),
+                "monthly_income": (decision.income_result.verified_monthly_income if (decision and decision.income_result) else 0.0),
+                "loan_amount": case.loan_amount,
+            },
+            "real_models": False,
+            "mode_label": "Mock mode",
+            "documents": [],
+            "dropped_documents": [],
+            "extracted_fields": {},
+            "mismatches": case.review_flags,
+            "decision": decision_payload or {
+                "application_id": case.application_id,
+                "decision": case.system_decision.value,
+                "loan_amount": case.loan_amount,
+                "reason_codes": [],
+                "risk_score": case.risk_score,
+                "review_flags": case.review_flags,
+                "disbursal_blocked": False,
+                "disbursal_block_reason": None,
+            }
+        }
 
     system_decision = (record.get("decision") or {}).get("decision", "review")
     final_decision = system_decision
