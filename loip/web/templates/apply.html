@@ -37,7 +37,8 @@
   .field input:focus,.field select:focus{outline:none;border-color:var(--accent);
     box-shadow:0 0 0 3px var(--accent-soft)}
   .field input::placeholder{color:var(--faint)}
-  .divider{height:1px;background:var(--line);margin:28px 0}
+  .field-error{color:var(--bad);font-size:.78rem;margin-top:5px;line-height:1.3}
+  .field input.error{border-color:var(--bad)}
   .uploads{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .slot{border:1.5px dashed var(--line);border-radius:12px;padding:22px;text-align:center;
     cursor:pointer;transition:border-color .15s,background .15s;position:relative;min-height:130px;
@@ -251,6 +252,57 @@ SLOTS.forEach(s=>{
   uploadsEl.appendChild(d);
 });
 
+/* ---------- field validations ---------- */
+const validators={};
+function isValid(name){
+  const el=form.querySelector(`[name="${name}"]`);
+  const v=String(el.value||'').trim();
+  if(!v)return false;
+  const fn=validators[name];
+  return fn ? fn(v) : true;
+}
+function showFieldError(name,msg){
+  const el=form.querySelector(`[name="${name}"]`);
+  const err=el.parentElement.querySelector('.field-error');
+  if(err)err.remove();
+  el.classList.remove('error');
+  if(msg){
+    el.classList.add('error');
+    const e=document.createElement('div');e.className='field-error';
+    e.textContent=msg;
+    el.parentElement.appendChild(e);
+  }
+}
+function validateField(name){
+  const el=form.querySelector(`[name="${name}"]`);
+  const v=String(el.value||'').trim();
+  if(!v||!validators[name]){showFieldError(name,'');return true;}
+  const ok=validators[name](v);
+  showFieldError(name,ok?'':el.dataset.msg||'Invalid value');
+  return ok;
+}
+function validateAll(){
+  let ok=true;
+  ['mobile_number','pan_number','aadhaar_number'].forEach(n=>{if(!isValid(n))ok=false;});
+  return ok;
+}
+validators.aadhaar_number=function(v){
+  return /^\d{12}$/.test(v.replace(/\s+/g,''));
+};
+validators.pan_number=function(v){
+  return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v.toUpperCase());
+};
+validators.mobile_number=function(v){
+  return /^[6-9]\d{9}$/.test(v);
+};
+const valFields=document.querySelectorAll('[name="mobile_number"],[name="pan_number"],[name="aadhaar_number"]');
+valFields.forEach(el=>{
+  const name=el.getAttribute('name');
+  if(name==='aadhaar_number') el.dataset.msg='Invalid Aadhaar Number. Must be exactly 12 digits.';
+  if(name==='pan_number') el.dataset.msg='Invalid PAN Number. Must be 5 letters + 4 digits + 1 letter.';
+  if(name==='mobile_number') el.dataset.msg='Invalid Mobile Number. Must be 10 digits starting with 6-9.';
+});
+
 /* ---------- form gating ---------- */
 const form=document.getElementById('loanForm');
 const submitBtn=document.getElementById('submitBtn');
@@ -259,7 +311,7 @@ let livenessPass=false;
 function formComplete(){
   const fd=new FormData(form);
   for(const[,v]of fd.entries())if(!String(v).trim())return false;
-  return Object.keys(files).length===SLOTS.length && livenessPass;
+  return Object.keys(files).length===SLOTS.length && livenessPass && validateAll();
 }
 function refresh(){
   const fd=new FormData(form);let filled=0,total=7;
@@ -275,6 +327,7 @@ function refresh(){
   else footnote.textContent='Fill all fields and upload documents to submit';
 }
 form.addEventListener('input',refresh);
+valFields.forEach(el=>el.addEventListener('blur',function(){validateField(this.getAttribute('name'));refresh();}));
 
 /* ---------- liveness detection ---------- */
 const camVideo=document.getElementById('camVideo');

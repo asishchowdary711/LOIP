@@ -2,275 +2,645 @@
 {% block title %}Review: {{ case.applicant_name }} — LOIP{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-    <div>
-        <h2>{{ case.applicant_name }}</h2>
-        <span style="color: var(--muted); font-size: 0.85rem;">{{ case.application_id }} &middot; &#8377;{{ case.loan_amount | inr }}</span>
-    </div>
-    <span class="badge badge-{{ case.system_decision.value }}" style="font-size: 1rem; padding: 0.4em 1em;">
-        {{ case.system_decision.value|upper }}
-    </span>
-</div>
+<!-- Page Animation and Pulsing Glow Styles -->
+<style>
+    @keyframes pulseApprove {
+        0%, 100% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.2), inset 0 0 10px rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
+        50% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.4), inset 0 0 15px rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.6); }
+    }
+    @keyframes pulseReview {
+        0%, 100% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.2), inset 0 0 10px rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); }
+        50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.4), inset 0 0 15px rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.6); }
+    }
+    @keyframes pulseReject {
+        0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.2), inset 0 0 10px rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+        50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.4), inset 0 0 15px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.6); }
+    }
+    .pulse-approve { animation: pulseApprove 3s infinite; }
+    .pulse-review { animation: pulseReview 3s infinite; }
+    .pulse-reject { animation: pulseReject 3s infinite; }
+    
+    .checklist-item {
+        transition: all 0.3s ease;
+        padding: 0.5rem;
+        border-radius: 0.35rem;
+    }
+    .checklist-item:hover {
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .checklist-cb:checked + .checklist-text {
+        text-decoration: line-through;
+        color: var(--muted);
+    }
+</style>
 
-<div class="grid-2">
-    <!-- Left: Extracted Data & Evidence -->
-    <div>
-        {% if decision %}
-        <div class="card">
-            <h2>Identity Verification</h2>
-            <div class="field-row">
-                <span class="label">Confidence</span>
-                <span class="value">
-                    {{ "%.0f"|format(decision.identity_result.identity_confidence * 100) }}%
-                    <span class="confidence-bar"><span class="fill" style="width: {{ decision.identity_result.identity_confidence * 100 }}%; background: {% if decision.identity_result.identity_confidence >= 0.7 %}var(--success){% elif decision.identity_result.identity_confidence >= 0.3 %}var(--warning){% else %}var(--danger){% endif %};"></span></span>
+<!-- At-A-Glance Overview Header -->
+<div class="card" style="padding: 1.5rem; margin-bottom: 2rem; border-color: var(--border-hover);">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 2rem;">
+        
+        <!-- Case Meta Details -->
+        <div style="flex: 2; min-width: 250px;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem;">
+                <h2 style="font-size: 1.6rem; font-weight: 800; color: var(--text-heading); margin-bottom: 0;">{{ case.applicant_name }}</h2>
+                <span class="badge badge-{{ case.status.value }}" style="font-size: 0.65rem; padding: 0.2em 0.6em;">
+                    {{ case.status.value|replace('_', ' ')|title }}
                 </span>
             </div>
-            <div class="field-row">
-                <span class="label">PAN Verified</span>
-                <span class="value">{% if decision.identity_result.pan_verified %}Yes{% else %}No{% endif %}</span>
-            </div>
-            <div class="field-row">
-                <span class="label">Aadhaar Verified</span>
-                <span class="value">{% if decision.identity_result.aadhaar_verified %}Yes{% else %}No{% endif %}</span>
-            </div>
-            {% if decision.identity_result.tamper_flags %}
-            <div style="margin-top: 0.5rem;">
-                {% for flag in decision.identity_result.tamper_flags %}
-                <span class="badge badge-reject" style="margin: 0.15rem;">{{ flag }}</span>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="card">
-            <h2>Income Assessment</h2>
-            <div class="field-row">
-                <span class="label">Verified Monthly Income</span>
-                <span class="value">&#8377;{{ decision.income_result.verified_monthly_income | inr }}</span>
-            </div>
-            <div class="field-row">
-                <span class="label">Income Confidence</span>
-                <span class="value">{{ "%.0f"|format(decision.income_result.income_confidence * 100) }}%</span>
-            </div>
-            <div class="field-row">
-                <span class="label">Segment</span>
-                <span class="value">{{ decision.income_result.segment|title }}</span>
-            </div>
-            {% if decision.income_result.anomaly_flags %}
-            <div style="margin-top: 0.5rem;">
-                {% for flag in decision.income_result.anomaly_flags %}
-                <span class="badge badge-review" style="margin: 0.15rem;">{{ flag }}</span>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="card">
-            <h2>Affordability</h2>
-            <div class="field-row">
-                <span class="label">FOIR</span>
-                <span class="value" style="color: {% if decision.affordability_result.foir <= 0.50 %}var(--success){% elif decision.affordability_result.foir <= 0.60 %}var(--warning){% else %}var(--danger){% endif %};">
-                    {{ "%.0f"|format(decision.affordability_result.foir * 100) }}%
-                </span>
-            </div>
-            <div class="field-row">
-                <span class="label">Existing Obligations</span>
-                <span class="value">&#8377;{{ decision.affordability_result.existing_obligations | inr }}/mo</span>
-            </div>
-            <div class="field-row">
-                <span class="label">Proposed EMI</span>
-                <span class="value">&#8377;{{ decision.affordability_result.proposed_emi | inr }}/mo</span>
-            </div>
-            <div class="field-row">
-                <span class="label">Disposable Income</span>
-                <span class="value">&#8377;{{ decision.affordability_result.disposable_income | inr }}/mo</span>
-            </div>
-            <div class="field-row">
-                <span class="label">Cashflow Stability</span>
-                <span class="value">{{ "%.0f"|format(decision.affordability_result.cashflow_stability * 100) }}%</span>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Credit Bureau</h2>
-            <div class="field-row">
-                <span class="label">CIBIL Score</span>
-                <span class="value" style="font-size: 1.25rem; color: {% if decision.bureau_result.score >= 750 %}var(--success){% elif decision.bureau_result.score >= 700 %}var(--warning){% else %}var(--danger){% endif %};">
-                    {{ decision.bureau_result.score }}
-                </span>
-            </div>
-            <div class="field-row">
-                <span class="label">Active Loans</span>
-                <span class="value">{{ decision.bureau_result.active_loans }}</span>
-            </div>
-            <div class="field-row">
-                <span class="label">Overdue Accounts</span>
-                <span class="value">{{ decision.bureau_result.overdue_accounts }}</span>
-            </div>
-            <div class="field-row">
-                <span class="label">DPD 90+</span>
-                <span class="value">{% if decision.bureau_result.dpd_90_plus %}Yes{% else %}No{% endif %}</span>
-            </div>
-        </div>
-
-        {% if evidence_chains %}
-        <div class="card">
-            <h2>Evidence Chains ({{ evidence_chains|length }})</h2>
-            <p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem;">
-                Every figure traced to its source document or API.
-            </p>
-            {% for chain in evidence_chains %}
-            <div style="border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.6rem; margin-bottom: 0.6rem;">
-                <div style="font-weight: 500; font-size: 0.85rem;">{{ chain.claim }}</div>
-                <div class="field-row">
-                    <span class="label">Reconciled Value</span>
-                    <span class="value">{{ chain.reconciled_value }}</span>
-                </div>
-                <div class="field-row">
-                    <span class="label">Method</span>
-                    <span class="value">
-                        <span class="badge badge-pending">{{ chain.reconciliation_method.value|replace('_', ' ') }}</span>
-                    </span>
-                </div>
-                <div class="field-row">
-                    <span class="label">Confidence</span>
-                    <span class="value">{{ "%.0f"|format(chain.confidence * 100) }}%</span>
-                </div>
-                {% if chain.supporting %}
-                <div style="margin-top: 0.4rem; font-size: 0.75rem; color: var(--muted);">Sources:</div>
-                {% for field in chain.supporting %}
-                <div style="font-size: 0.75rem; padding-left: 0.5rem;">
-                    &bull; {{ field.field_name }} = <strong>{{ field.normalized_value or field.raw_value }}</strong>
-                    <span style="color: var(--muted);">
-                        ({{ field.source.document_type.value }} · {{ field.source.extraction_method.value }})
-                    </span>
-                    {% if field.source.document_id %}
-                    <div style="font-family: monospace; font-size: 0.7rem; color: var(--muted); padding-left: 0.7rem;">
-                        &#128274; minio://{{ field.source.document_id }}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+                <span>ID: {{ case.application_id }}</span>
+                <span>&bull;</span>
+                <span>Amount: &#8377;{{ case.loan_amount | inr }}</span>
+                {% if case.assigned_to %}
+                <span>&bull;</span>
+                <span>Assigned: {{ case.assigned_to }}</span>
                 {% endif %}
             </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        {% endif %}
-    </div>
-
-    <!-- Right: Explainability + Decision Panel -->
-    <div>
-        {% if explainability and explainability.shap_explanations %}
-        <div class="card">
-            <h2>Risk Factors (SHAP)</h2>
-            {% for shap in explainability.shap_explanations %}
-            <div style="margin-bottom: 0.75rem;">
-                <div style="font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem;">{{ shap.model_name }}</div>
-                {% for contrib in shap.top_positive %}
-                <div class="shap-bar">
-                    <span style="width: 140px; font-size: 0.8rem;">{{ contrib.feature_name }}</span>
-                    <span class="bar shap-positive" style="width: {{ (contrib.shap_value * 300)|abs }}px;"></span>
-                    <span style="font-size: 0.75rem; color: var(--success);">+{{ "%.3f"|format(contrib.shap_value) }}</span>
-                </div>
-                {% endfor %}
-                {% for contrib in shap.top_negative %}
-                <div class="shap-bar">
-                    <span style="width: 140px; font-size: 0.8rem;">{{ contrib.feature_name }}</span>
-                    <span class="bar shap-negative" style="width: {{ (contrib.shap_value * 300)|abs }}px;"></span>
-                    <span style="font-size: 0.75rem; color: var(--danger);">{{ "%.3f"|format(contrib.shap_value) }}</span>
-                </div>
+            {% if case.review_flags %}
+            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                {% for flag in case.review_flags %}
+                <span class="badge badge-review" style="font-size: 0.65rem;">🚨 {{ flag }}</span>
                 {% endfor %}
             </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        {% if explainability and explainability.copilot %}
-        <div class="card">
-            <h2>AI Copilot Assessment</h2>
-            <p style="margin-bottom: 0.75rem;">{{ explainability.copilot.profile_summary }}</p>
-            <div style="margin-bottom: 0.75rem;">
-                <strong style="font-size: 0.8rem;">Primary Reason:</strong>
-                <div>{{ explainability.copilot.primary_decision_reason }}</div>
-            </div>
-            {% if explainability.copilot.inconsistencies %}
-            <div style="margin-bottom: 0.75rem;">
-                <strong style="font-size: 0.8rem;">Inconsistencies:</strong>
-                <ul style="margin: 0.25rem 0 0 1.25rem; font-size: 0.875rem;">
-                    {% for item in explainability.copilot.inconsistencies %}
-                    <li style="color: var(--danger);">{{ item }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
             {% endif %}
-            {% if explainability.copilot.reviewer_questions %}
-            <div>
-                <strong style="font-size: 0.8rem;">Questions to Verify:</strong>
-                <ul style="margin: 0.25rem 0 0 1.25rem; font-size: 0.875rem;">
-                    {% for q in explainability.copilot.reviewer_questions %}
-                    <li>{{ q }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-            <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--muted);">
-                Generated by {{ explainability.copilot.model_id }} at {{ explainability.copilot.generated_at.strftime('%Y-%m-%d %H:%M') }}
-            </div>
         </div>
-        {% endif %}
 
-        {% if case.review_flags %}
-        <div class="card">
-            <h2>Review Flags</h2>
-            {% for flag in case.review_flags %}
-            <span class="badge badge-review" style="margin: 0.15rem;">{{ flag }}</span>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Decision Panel -->
-        <div class="card" style="border-color: var(--primary);">
-            <h2>Decision Override</h2>
-            {% if case.status.value == 'completed' %}
-            <div class="alert alert-info">This case has been completed.</div>
-            {% else %}
-            <form method="POST" action="/ui/review/{{ case.case_id }}/override">
-                <label for="override_decision">Override Decision</label>
-                <select name="override_decision" id="override_decision" required>
-                    <option value="">-- Select --</option>
-                    <option value="approve">Approve</option>
-                    <option value="reject">Reject</option>
-                    <option value="escalate">Escalate</option>
-                </select>
-
-                <label for="reason_code">Reason Code</label>
-                <select name="reason_code" id="reason_code" required>
-                    <option value="">-- Select --</option>
-                    <option value="income_verified_manually">Income Verified Manually</option>
-                    <option value="identity_confirmed_by_vkyc">Identity Confirmed by V-KYC</option>
-                    <option value="employer_verified_externally">Employer Verified Externally</option>
-                    <option value="documents_resubmitted">Documents Resubmitted</option>
-                    <option value="fraud_confirmed">Fraud Confirmed</option>
-                    <option value="additional_collateral">Additional Collateral</option>
-                    <option value="policy_exception">Policy Exception</option>
-                    <option value="data_entry_error">Data Entry Error</option>
-                    <option value="system_error_correction">System Error Correction</option>
-                    <option value="other">Other</option>
-                </select>
-
-                <label for="notes">Notes (mandatory, min 10 characters)</label>
-                <textarea name="notes" id="notes" required minlength="10" placeholder="Provide justification for this override..."></textarea>
-
-                <input type="hidden" name="reviewer_id" value="reviewer_01">
-
-                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-                    <button type="submit" class="btn btn-primary">Submit Override</button>
-                    <a href="/ui/queue" class="btn btn-outline">Back to Queue</a>
+        <!-- SVG Circular Onboarding Risk Score progress dial -->
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 140px;">
+            <div class="risk-dial-container" style="position: relative; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center;">
+                <svg width="110" height="110" viewBox="0 0 110 110">
+                    <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="7" />
+                    <circle cx="55" cy="55" r="46" fill="none" 
+                            stroke="{% if case.risk_score >= 0.7 %}var(--danger){% elif case.risk_score >= 0.35 %}var(--warning){% else %}var(--success){% endif %}" 
+                            stroke-width="7" 
+                            stroke-linecap="round"
+                            stroke-dasharray="289" 
+                            stroke-dashoffset="289"
+                            id="riskCircle"
+                            style="transform: rotate(-90deg); transform-origin: 55px 55px; transition: stroke-dashoffset 1.5s cubic-bezier(0.16, 1, 0.3, 1);" />
+                </svg>
+                <div style="position: absolute; text-align: center; display: flex; flex-direction: column;">
+                    <span style="font-size: 1.5rem; font-weight: 800; color: var(--text-heading); font-family: 'JetBrains Mono', monospace; line-height: 1;">
+                        {{ "%.0f"|format((case.risk_score or 0) * 100) }}%
+                    </span>
+                    <span style="font-size: 0.6rem; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin-top: 0.15rem;">
+                        Risk Score
+                    </span>
                 </div>
-            </form>
-            {% endif %}
+            </div>
         </div>
+
+        <!-- Pulser Recommendation Badge -->
+        <div style="flex: 1.5; min-width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div class="card pulse-{{ case.system_decision.value }}" style="background: rgba(15, 23, 42, 0.4); border-width: 1px; border-radius: 0.75rem; padding: 1rem 1.5rem; text-align: center; width: 100%; margin-bottom: 0;">
+                <div style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 0.25rem;">Recommendation</div>
+                <div style="font-size: 1.6rem; font-weight: 800; color: {% if case.system_decision.value == 'approve' %}var(--success){% elif case.system_decision.value == 'review' %}var(--warning){% else %}var(--danger){% endif %}; letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:currentColor;"></span>
+                    {{ case.system_decision.value|upper }}
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
+
+<!-- Grid of Key Verified Metrics with Traced Source Indicators -->
+<div class="grid-3" style="margin-bottom: 2rem;">
+    <!-- Metric 1: Identity -->
+    <div class="card" style="padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0;">
+        <div>
+            <div style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.25rem;">Identity Trust</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-heading); display: flex; align-items: center; gap: 0.5rem;">
+                {{ "%.0f"|format((decision.identity_result.identity_confidence or 0) * 100) }}%
+                <span class="confidence-bar" style="width: 40px; margin-left: 0;"><span class="fill" style="width: {{ (decision.identity_result.identity_confidence or 0) * 100 }}%; background: {% if decision.identity_result.identity_confidence >= 0.7 %}var(--success){% elif decision.identity_result.identity_confidence >= 0.3 %}var(--warning){% else %}var(--danger){% endif %};"></span></span>
+            </div>
+        </div>
+        <span class="traced-tag" title="Identity verified via PAN (NSDL) and Aadhaar (UIDAI) check + ArcFace Liveness Matching.">PAN/Aadhaar</span>
+    </div>
+    
+    <!-- Metric 2: Income -->
+    <div class="card" style="padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0;">
+        <div>
+            <div style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.25rem;">Verified Income</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-heading);">
+                &#8377;{{ decision.income_result.verified_monthly_income | inr }}/mo
+            </div>
+        </div>
+        <span class="traced-tag" title="Reconciled from uploaded Salary slips, Bank statements and ITR filings.">Payslips/Bank</span>
+    </div>
+
+    <!-- Metric 3: CIBIL -->
+    <div class="card" style="padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0;">
+        <div>
+            <div style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.25rem;">CIBIL Score</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: {% if decision.bureau_result.score >= 750 %}var(--success){% elif decision.bureau_result.score >= 700 %}var(--warning){% else %}var(--danger){% endif %};">
+                {{ decision.bureau_result.score or '-' }}
+            </div>
+        </div>
+        <span class="traced-tag" title="Direct API fetch from Credit Information Bureau (India) Limited.">CIBIL Bureau</span>
+    </div>
+</div>
+
+<!-- Tab Navigation Navigation -->
+<div class="tabs-nav">
+    <button class="tab-btn active" onclick="switchTab(event, 'copilotTab')">🤖 AI Copilot & Risk</button>
+    <button class="tab-btn" onclick="switchTab(event, 'dataTab')">📊 Detailed Checks</button>
+    <button class="tab-btn" onclick="switchTab(event, 'evidenceTab')">🔗 Evidence Audit Trail ({{ evidence_chains|length }})</button>
+    <button class="tab-btn" onclick="switchTab(event, 'overrideTab')">✍️ Manual Override</button>
+</div>
+
+<!-- Tab 1: AI Copilot & Risk Analysis -->
+<div id="copilotTab" class="tab-content active">
+    <div class="grid-2">
+        
+        <!-- Left: AI Copilot Assessment -->
+        <div>
+            {% if explainability and explainability.copilot %}
+            <div class="card" style="height: 100%;">
+                <h2>AI Copilot Audit Report</h2>
+                
+                <div class="copilot-container" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <!-- Copilot Profile Summary -->
+                    <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.12); border-radius: 0.75rem; padding: 1.25rem; position: relative; margin-top: 0.5rem;">
+                        <div style="position: absolute; top: -12px; left: 1rem; background: var(--primary); color: white; padding: 0.15rem 0.6rem; font-size: 0.65rem; font-weight: 800; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.25rem;">
+                            <span>🤖</span> Executive Summary
+                        </div>
+                        <p style="font-size: 0.92rem; line-height: 1.6; color: var(--text-heading); font-style: italic;">
+                            "{{ explainability.copilot.profile_summary }}"
+                        </p>
+                    </div>
+
+                    <!-- Primary Driver -->
+                    <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem 1.25rem;">
+                        <div style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.35rem;">
+                            🎯 Key Recommendation Driver
+                        </div>
+                        <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-heading); line-height: 1.4;">
+                            {{ explainability.copilot.primary_decision_reason }}
+                        </div>
+                    </div>
+
+                    <!-- Flagged Inconsistencies -->
+                    {% if explainability.copilot.inconsistencies %}
+                    <div style="background: var(--danger-glow); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 0.75rem; padding: 1.25rem;">
+                        <div style="font-size: 0.7rem; color: var(--danger); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.65rem; display: flex; align-items: center; gap: 0.35rem;">
+                            ⚠️ Anomalies & Warnings ({{ explainability.copilot.inconsistencies|length }})
+                        </div>
+                        <ul style="list-style-type: none; display: flex; flex-direction: column; gap: 0.5rem;">
+                            {% for item in explainability.copilot.inconsistencies %}
+                            <li style="font-size: 0.82rem; color: #fca5a5; display: flex; align-items: flex-start; gap: 0.5rem;">
+                                <span style="color: var(--danger); font-size: 1rem; line-height: 1;">&bull;</span>
+                                <span>{{ item }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <!-- Checklist / Questions -->
+                    {% if explainability.copilot.reviewer_questions %}
+                    <div style="background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem;">
+                        <div style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.75rem;">
+                            ✅ Verification Checklist for Reviewer
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+                            {% for q in explainability.copilot.reviewer_questions %}
+                            <label class="checklist-item" style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; margin-top: 0; font-size: 0.85rem; color: var(--text); font-weight: normal; text-transform: none; letter-spacing: normal;">
+                                <input type="checkbox" class="checklist-cb" style="margin-top: 0.2rem; cursor: pointer; width: auto;" data-id="{{ case.case_id }}-q-{{ loop.index }}">
+                                <span class="checklist-text">{{ q }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div style="font-size: 0.7rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.25rem; display: flex; justify-content: space-between;">
+                        <span>Model: {{ explainability.copilot.model_id }}</span>
+                        <span>Generated: {{ explainability.copilot.generated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card" style="height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); min-height: 300px;">
+                <div>
+                    <span style="font-size: 2rem;">🤖</span>
+                    <p style="margin-top: 0.5rem;">No AI Copilot narrative available for this application.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right: SHAP Explainability & Risk factors -->
+        <div>
+            <div class="card" style="height: 100%;">
+                <h2>Model Risk Attribution (SHAP)</h2>
+                <p style="font-size: 0.8rem; color: var(--muted); margin-bottom: 1.5rem;">
+                    Impact of individual applicant features on the final machine learning risk decision model.
+                </p>
+
+                {% if explainability and explainability.shap_explanations %}
+                    {% for shap in explainability.shap_explanations %}
+                    <div style="margin-bottom: 2rem;">
+                        <div style="font-size: 0.75rem; color: var(--primary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin-bottom: 1rem;">
+                            Model: {{ shap.model_name }}
+                        </div>
+                        
+                        <div style="font-size: 0.75rem; color: var(--success); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Positive Drivers (Decreases Risk)</div>
+                        {% for contrib in shap.top_positive %}
+                        <div class="shap-bar" style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin: 0.5rem 0;">
+                            <span style="flex: 1.2; min-width: 130px; color: var(--text); font-weight: 500;">{{ contrib.feature_name }}</span>
+                            <div style="flex: 2; height: 8px; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden; margin: 0 1rem; position: relative;">
+                                <div class="bar shap-positive" style="position: absolute; left: 0; top: 0; height: 100%; width: 0; transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);" data-pct="{% set val = (contrib.shap_value * 150)|abs %}{% if val > 100 %}100{% else %}{{ val }}{% endif %}"></div>
+                            </div>
+                            <span style="font-family: 'JetBrains Mono', monospace; min-width: 60px; text-align: right; color: var(--success); font-weight: 600;">+{{ "%.3f"|format(contrib.shap_value) }}</span>
+                        </div>
+                        {% endfor %}
+
+                        <div style="font-size: 0.75rem; color: var(--danger); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1.25rem; margin-bottom: 0.5rem;">Risk Attributors (Increases Risk)</div>
+                        {% for contrib in shap.top_negative %}
+                        <div class="shap-bar" style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; margin: 0.5rem 0;">
+                            <span style="flex: 1.2; min-width: 130px; color: var(--text); font-weight: 500;">{{ contrib.feature_name }}</span>
+                            <div style="flex: 2; height: 8px; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden; margin: 0 1rem; position: relative;">
+                                <div class="bar shap-negative" style="position: absolute; left: 0; top: 0; height: 100%; width: 0; transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);" data-pct="{% set val = (contrib.shap_value * 150)|abs %}{% if val > 100 %}100{% else %}{{ val }}{% endif %}"></div>
+                            </div>
+                            <span style="font-family: 'JetBrains Mono', monospace; min-width: 60px; text-align: right; color: var(--danger); font-weight: 600;">{{ "%.3f"|format(contrib.shap_value) }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--muted); font-size: 0.9rem;">
+                    No SHAP explanations calculated for this case.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Tab 2: Detailed Checks -->
+<div id="dataTab" class="tab-content">
+    {% if decision %}
+    <div class="grid-2" style="align-items: start;">
+        
+        <!-- Column 1: Identity & Bureau -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <!-- Identity card -->
+            <div class="card" style="margin-bottom: 0;">
+                <h2>Identity Verification Checks</h2>
+                <div class="field-row">
+                    <span class="label">Verification Confidence</span>
+                    <span class="value" style="display: flex; align-items: center; gap: 0.5rem;">
+                        {{ "%.0f"|format(decision.identity_result.identity_confidence * 100) }}%
+                        <span class="confidence-bar"><span class="fill" style="width: {{ decision.identity_result.identity_confidence * 100 }}%; background: {% if decision.identity_result.identity_confidence >= 0.7 %}var(--success){% elif decision.identity_result.identity_confidence >= 0.3 %}var(--warning){% else %}var(--danger){% endif %};"></span></span>
+                    </span>
+                </div>
+                <div class="field-row">
+                    <span class="label">PAN Database Reconciled</span>
+                    <span class="value">
+                        {% if decision.identity_result.pan_verified %}
+                        <span style="color: var(--success);">✔ Reconciled (NSDL)</span>
+                        {% else %}
+                        <span style="color: var(--danger);">❌ Verification Failed</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Aadhaar Verhoeff Checked</span>
+                    <span class="value">
+                        {% if decision.identity_result.aadhaar_verified %}
+                        <span style="color: var(--success);">✔ Valid Checksum</span>
+                        {% else %}
+                        <span style="color: var(--danger);">❌ Verification Failed</span>
+                        {% endif %}
+                    </span>
+                </div>
+                {% if decision.identity_result.tamper_flags %}
+                <div style="margin-top: 1rem;">
+                    <div style="font-size: 0.7rem; color: var(--danger); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Tamper Violations</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                        {% for flag in decision.identity_result.tamper_flags %}
+                        <span class="badge badge-reject" style="font-size: 0.65rem;">{{ flag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Bureau card -->
+            <div class="card" style="margin-bottom: 0;">
+                <h2>Credit Bureau Profile</h2>
+                <div class="field-row">
+                    <span class="label">Reconciled CIBIL Score</span>
+                    <span class="value" style="font-size: 1.25rem; font-weight: 800; color: {% if decision.bureau_result.score >= 750 %}var(--success){% elif decision.bureau_result.score >= 700 %}var(--warning){% else %}var(--danger){% endif %};">
+                        {{ decision.bureau_result.score }}
+                    </span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Active Loan Accounts</span>
+                    <span class="value">{{ decision.bureau_result.active_loans }}</span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Overdue Accounts</span>
+                    <span class="value" style="color: {% if decision.bureau_result.overdue_accounts > 0 %}var(--danger){% else %}var(--text-heading){% endif %};">
+                        {{ decision.bureau_result.overdue_accounts }}
+                    </span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Severe Delinquency (90+ DPD)</span>
+                    <span class="value">
+                        {% if decision.bureau_result.dpd_90_plus %}
+                        <span class="badge badge-reject">Flagged</span>
+                        {% else %}
+                        <span style="color: var(--success);">Clean Records</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Column 2: Income & Affordability -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <!-- Income card -->
+            <div class="card" style="margin-bottom: 0;">
+                <h2>Income Multi-Source Reconciliation</h2>
+                <div class="field-row">
+                    <span class="label">Verified Monthly Income</span>
+                    <span class="value" style="font-size: 1.1rem; color: var(--text-heading); font-weight: 700;">
+                        &#8377;{{ decision.income_result.verified_monthly_income | inr }}/mo
+                    </span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Income Confidence</span>
+                    <span class="value">{{ "%.0f"|format(decision.income_result.income_confidence * 100) }}%</span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Employment Segment</span>
+                    <span class="value">{{ decision.income_result.segment|title }}</span>
+                </div>
+                {% if decision.income_result.anomaly_flags %}
+                <div style="margin-top: 1rem;">
+                    <div style="font-size: 0.7rem; color: var(--warning); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Income Anomalies</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                        {% for flag in decision.income_result.anomaly_flags %}
+                        <span class="badge badge-review" style="font-size: 0.65rem;">{{ flag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Affordability card -->
+            <div class="card" style="margin-bottom: 0;">
+                <h2>Affordability & Debt Coverage</h2>
+                <div class="field-row">
+                    <span class="label">Debt-Income Ratio (FOIR)</span>
+                    <span class="value" style="font-size: 1.1rem; font-weight: 700; color: {% if decision.affordability_result.foir <= 0.50 %}var(--success){% elif decision.affordability_result.foir <= 0.60 %}var(--warning){% else %}var(--danger){% endif %};">
+                        {{ "%.0f"|format(decision.affordability_result.foir * 100) }}%
+                    </span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Existing Monthly Obligations</span>
+                    <span class="value">&#8377;{{ decision.affordability_result.existing_obligations | inr }}/mo</span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Proposed EMI obligation</span>
+                    <span class="value">&#8377;{{ decision.affordability_result.proposed_emi | inr }}/mo</span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Disposable Surplus Cashflow</span>
+                    <span class="value">&#8377;{{ decision.affordability_result.disposable_income | inr }}/mo</span>
+                </div>
+                <div class="field-row">
+                    <span class="label">Disposable Cashflow Stability</span>
+                    <span class="value" style="display: flex; align-items: center; gap: 0.5rem;">
+                        {{ "%.0f"|format(decision.affordability_result.cashflow_stability * 100) }}%
+                        <span class="confidence-bar"><span class="fill" style="width: {{ decision.affordability_result.cashflow_stability * 100 }}%; background: var(--primary);"></span></span>
+                    </span>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+    {% else %}
+    <div class="card" style="display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); min-height: 250px;">
+        <p>No detailed verification checks dataset is recorded for this application.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tab 3: Evidence Audit Trail -->
+<div id="evidenceTab" class="tab-content">
+    <div class="card">
+        <h2>Trace-To-Source Audit Trails</h2>
+        <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;">
+            India DPDP Act 2023 Audit Log: Click on any claim field below to trace it back to its verified extraction method, source document types, and secure MinIO blob hashes.
+        </p>
+        
+        {% if evidence_chains %}
+        <div class="evidence-accordion" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {% for chain in evidence_chains %}
+            <div class="accordion-item" style="border: 1px solid var(--border); border-radius: 0.75rem; background: rgba(255, 255, 255, 0.01); overflow: hidden; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+                
+                <!-- Accordion Header -->
+                <div class="accordion-header" style="padding: 1.1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleAccordion(this)">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="font-size: 1.2rem; color: var(--primary);">📄</span>
+                        <div>
+                            <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-heading);">{{ chain.claim|replace('_', ' ')|title }}</div>
+                            <div style="font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem;">Reconciliation Method: <span style="font-family: 'JetBrains Mono', monospace; color: var(--primary);">{{ chain.reconciliation_method.value|replace('_', ' ') }}</span></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1.5rem;">
+                        <div style="text-align: right;">
+                            <div style="font-weight: 800; color: var(--success); font-family: 'JetBrains Mono', monospace; font-size: 1rem;">{{ chain.reconciled_value }}</div>
+                            <div style="font-size: 0.7rem; color: var(--muted); font-weight: 500;">Confidence: {{ "%.0f"|format(chain.confidence * 100) }}%</div>
+                        </div>
+                        <span class="accordion-arrow" style="transition: transform 0.3s ease; color: var(--muted); font-size: 0.8rem;">▼</span>
+                    </div>
+                </div>
+                
+                <!-- Accordion Content -->
+                <div class="accordion-content" style="max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1); border-top: 0px solid var(--border); background: rgba(0, 0, 0, 0.15);">
+                    <div style="padding: 1.25rem;">
+                        <div style="font-weight: 700; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem;">
+                            Document Supporting Sources ({{ chain.supporting|length }})
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                            {% for field in chain.supporting %}
+                            <div style="border-left: 3px solid var(--primary); padding-left: 1rem; font-size: 0.85rem; padding-bottom: 0.25rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                    <span style="font-weight: 700; color: var(--text-heading); font-size: 0.88rem;">{{ field.field_name|replace('_', ' ')|title }}</span>
+                                    <span style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--info); font-size: 0.9rem;">{{ field.normalized_value or field.raw_value }}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem;">
+                                    <span>Extraction Method: <strong>{{ field.source.extraction_method.value }}</strong></span>
+                                    <span>Doc Source Type: <strong>{{ field.source.document_type.value }}</strong></span>
+                                </div>
+                                {% if field.source.document_id %}
+                                <div style="display: flex; align-items: center; gap: 0.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; background: rgba(15, 23, 42, 0.4); padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); width: 100%;">
+                                    <span style="color: var(--primary);">🔒 Audit:</span>
+                                    <span style="color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">minio://{{ field.source.document_id }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align: center; color: var(--muted); padding: 3rem;">
+            No traceable evidence chains available for this application.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Tab 4: Manual Override -->
+<div id="overrideTab" class="tab-content">
+    <div class="card" style="border-color: var(--primary); max-width: 700px; margin: 0 auto;">
+        <h2>Manual Override Action Console</h2>
+        <p style="font-size: 0.8rem; color: var(--muted); margin-bottom: 1.5rem;">
+            Bank administrators can manually override the machine learning risk recommendation. Override logs are audited and stored for compliance.
+        </p>
+
+        {% if case.status.value == 'completed' %}
+        <div class="alert alert-info">
+            <span style="font-size: 1.1rem;">ℹ</span>
+            <div>
+                <strong>Manual review closed.</strong> This case has been completed.
+            </div>
+        </div>
+        {% else %}
+        <form method="POST" action="/ui/review/{{ case.case_id }}/override">
+            <div>
+                <label for="override_decision">Target Override Decision</label>
+                <select name="override_decision" id="override_decision" required>
+                    <option value="">-- Select Decision --</option>
+                    <option value="approve" style="color: var(--success); font-weight: 600;">Approve (Issue Offer)</option>
+                    <option value="reject" style="color: var(--danger); font-weight: 600;">Reject Application</option>
+                    <option value="escalate" style="color: var(--warning); font-weight: 600;">Escalate to Senior Committee</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="reason_code">Verification Override Reason Code</label>
+                <select name="reason_code" id="reason_code" required>
+                    <option value="">-- Select Reason Code --</option>
+                    <option value="income_verified_manually">Income Verified Manually (Alternate statements)</option>
+                    <option value="identity_confirmed_by_vkyc">Identity Confirmed by V-KYC Session</option>
+                    <option value="employer_verified_externally">Employer Verified via Domain/EPFO</option>
+                    <option value="documents_resubmitted">Documents Resubmitted & Re-extracted</option>
+                    <option value="fraud_confirmed">Fraud/Identity Anomaly Confirmed</option>
+                    <option value="additional_collateral">Additional Collateral/Guarantor Sourced</option>
+                    <option value="policy_exception">Board Policy Exception Granted</option>
+                    <option value="data_entry_error">Data Entry/Scanning Error Rectified</option>
+                    <option value="system_error_correction">Machine Learning Scoring Correction</option>
+                    <option value="other">Other (Provide details below)</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="notes">Compliance Justification Notes (Mandatory, min 10 characters)</label>
+                <textarea name="notes" id="notes" required minlength="10" placeholder="Provide a detailed, auditable justification explaining why this override decision is being made for the risk committee..."></textarea>
+            </div>
+
+            <input type="hidden" name="reviewer_id" value="reviewer_01">
+
+            <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Submit Override & Close Case</button>
+                <a href="/ui/queue" class="btn btn-outline" style="flex: 1;">Back to Queue</a>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Page Scripts -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        // 1. Radial Progress score fill animation
+        const score = {{ case.risk_score or 0 }};
+        const circle = document.getElementById("riskCircle");
+        const dasharray = 289; // 2 * Math.PI * r (46)
+        const offset = dasharray - (dasharray * score);
+        
+        // Trigger draw animation
+        setTimeout(() => {
+            circle.style.strokeDashoffset = offset;
+        }, 150);
+
+        // 2. SHAP bars width animation
+        const bars = document.querySelectorAll('.shap-bar .bar');
+        setTimeout(() => {
+            bars.forEach(bar => {
+                const pct = bar.getAttribute('data-pct');
+                bar.style.width = pct + '%';
+            });
+        }, 200);
+
+        // 3. Checklist Persistence in LocalStorage
+        document.querySelectorAll('.checklist-cb').forEach(cb => {
+            const id = cb.getAttribute('data-id');
+            if (localStorage.getItem(id) === 'true') {
+                cb.checked = true;
+                cb.closest('.checklist-item').style.opacity = '0.6';
+            }
+            cb.addEventListener('change', (e) => {
+                localStorage.setItem(id, e.target.checked);
+                e.target.closest('.checklist-item').style.opacity = e.target.checked ? '0.6' : '1';
+            });
+        });
+    });
+
+    // 4. Tab switching logic
+    function switchTab(event, tabId) {
+        // Remove active class from buttons and tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        // Add active class to current elements
+        event.currentTarget.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+    }
+
+    // 5. Expandable evidence chains accordion logic
+    function toggleAccordion(header) {
+        const item = header.closest('.accordion-item');
+        const content = item.querySelector('.accordion-content');
+        const arrow = item.querySelector('.accordion-arrow');
+        const allItems = document.querySelectorAll('.accordion-item');
+        
+        // Collapse other accordion items
+        allItems.forEach(i => {
+            if (i !== item) {
+                const otherContent = i.querySelector('.accordion-content');
+                otherContent.style.maxHeight = '0';
+                otherContent.style.borderTopWidth = '0';
+                i.querySelector('.accordion-arrow').style.transform = 'rotate(0deg)';
+                i.style.borderColor = 'var(--border)';
+            }
+        });
+
+        if (content.style.maxHeight === '0px' || !content.style.maxHeight) {
+            content.style.maxHeight = content.scrollHeight + 'px';
+            content.style.borderTopWidth = '1px';
+            arrow.style.transform = 'rotate(180deg)';
+            item.style.borderColor = 'var(--primary)';
+        } else {
+            content.style.maxHeight = '0';
+            content.style.borderTopWidth = '0';
+            arrow.style.transform = 'rotate(0deg)';
+            item.style.borderColor = 'var(--border)';
+        }
+    }
+</script>
 {% endblock %}

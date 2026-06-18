@@ -2,57 +2,116 @@
 {% block title %}Review Queue — LOIP{% endblock %}
 
 {% block content %}
-<h2 style="margin-bottom: 1rem;">Review Queue</h2>
+<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
+    <div>
+        <h2 style="margin-bottom: 0.25rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em;">Review Queue</h2>
+        <p style="color: var(--muted); font-size: 0.875rem;">
+            Manage pending manual overrides and credit applications requiring audit
+        </p>
+    </div>
+</div>
 
-<div class="grid-3" style="margin-bottom: 1.5rem;">
-    <div class="card stat-card">
-        <div class="value">{{ summary.total_pending }}</div>
-        <div class="label">Pending</div>
+<div class="grid-3" style="margin-bottom: 2rem;">
+    <div class="card stat-card" style="--accent-color: var(--warning);">
+        <div class="label">Pending Review</div>
+        <div class="value" style="color: var(--warning);">{{ summary.total_pending }}</div>
     </div>
-    <div class="card stat-card">
-        <div class="value">{{ summary.total_in_progress }}</div>
+    <div class="card stat-card" style="--accent-color: var(--info);">
         <div class="label">In Progress</div>
+        <div class="value" style="color: var(--info);">{{ summary.total_in_progress }}</div>
     </div>
-    <div class="card stat-card">
+    <div class="card stat-card" style="--accent-color: var(--primary);">
+        <div class="label">Avg Age in Queue</div>
         <div class="value">{{ "%.0f"|format(summary.avg_age_minutes) }}m</div>
-        <div class="label">Avg Age</div>
     </div>
 </div>
 
 <div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>Applicant</th>
-                <th>Loan Amount</th>
-                <th>Decision</th>
-                <th>FOIR</th>
-                <th>CIBIL</th>
-                <th>Risk Score</th>
-                <th>Primary Reason</th>
-                <th>Status</th>
-                <th>Age</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for case in cases %}
-            <tr>
-                <td>{{ case.applicant_name }}</td>
-                <td>&#8377;{{ case.loan_amount | inr }}</td>
-                <td><span class="badge badge-{{ case.system_decision.value }}">{{ case.system_decision.value|upper }}</span></td>
-                <td>{% if case.foir is not none %}{{ "%.0f"|format(case.foir * 100) }}%{% else %}-{% endif %}</td>
-                <td>{{ case.cibil_score or '-' }}</td>
-                <td>{% if case.risk_score is not none %}{{ "%.2f"|format(case.risk_score) }}{% else %}-{% endif %}</td>
-                <td style="font-size: 0.8rem; color: var(--muted);">{{ case.primary_reason_code or '-' }}</td>
-                <td><span class="badge badge-{{ case.status.value }}">{{ case.status.value|replace('_', ' ')|title }}</span></td>
-                <td>{{ case.age_in_queue_minutes }}m</td>
-                <td><a href="/ui/review/{{ case.case_id }}" class="btn btn-outline">Review</a></td>
-            </tr>
-            {% else %}
-            <tr><td colspan="10" style="text-align: center; color: var(--muted); padding: 2rem;">No cases in queue</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div style="margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
+        <h2 style="margin-bottom: 0;">Applications Under Review</h2>
+        <div style="width: 320px; position: relative;">
+            <input type="search" id="searchInput" placeholder="Search applicant, decision, status..." style="padding-left: 2.25rem;">
+            <span style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 0.85rem;">🔍</span>
+        </div>
+    </div>
+    
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Applicant</th>
+                    <th>Loan Amount</th>
+                    <th>Decision</th>
+                    <th>FOIR</th>
+                    <th>CIBIL</th>
+                    <th>Risk Score</th>
+                    <th>Primary Reason</th>
+                    <th>Status</th>
+                    <th>Age</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for case in cases %}
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-heading);">{{ case.applicant_name }}</td>
+                    <td style="font-weight: 500;">&#8377;{{ case.loan_amount | inr }}</td>
+                    <td>
+                        <span class="badge badge-{{ case.system_decision.value }}">
+                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:currentColor; margin-right:1px;"></span>
+                            {{ case.system_decision.value|upper }}
+                        </span>
+                    </td>
+                    <td>{% if case.foir is not none %}{{ "%.0f"|format(case.foir * 100) }}%{% else %}-{% endif %}</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">{{ case.cibil_score or '-' }}</td>
+                    <td>
+                        {% if case.risk_score is not none %}
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">{{ "%.2f"|format(case.risk_score) }}</span>
+                            <div style="width: 50px; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
+                                <div style="height: 100%; width: {{ case.risk_score * 100 }}%; background: {% if case.risk_score >= 0.7 %}var(--danger){% elif case.risk_score >= 0.35 %}var(--warning){% else %}var(--success){% endif %};"></div>
+                            </div>
+                        </div>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 0.8rem; color: var(--muted); font-family: 'JetBrains Mono', monospace;">{{ case.primary_reason_code or '-' }}</td>
+                    <td>
+                        <span class="badge badge-{{ case.status.value }}">
+                            {{ case.status.value|replace('_', ' ')|title }}
+                        </span>
+                    </td>
+                    <td>{{ case.age_in_queue_minutes }}m</td>
+                    <td style="text-align: right;">
+                        <a href="/ui/review/{{ case.case_id }}" class="btn btn-outline" style="padding: 0.35rem 0.85rem; font-size: 0.8rem;">Review</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" style="text-align: center; color: var(--muted); padding: 3rem;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📂</div>
+                        No cases in queue
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<script>
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase();
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            if (text.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+</script>
 {% endblock %}
