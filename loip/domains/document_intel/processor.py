@@ -97,7 +97,12 @@ class DocumentIntelligenceProcessor:
 
     def classify_document(self, image: np.ndarray) -> ClassificationResult:
         result = self.classifier.classify(image)
-        if result.confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD:
+        is_classifier_mocked = getattr(self.classifier, "mock_mode", True)
+        is_ocr_mocked = False
+        if hasattr(self.classifier, "_ocr") and self.classifier._ocr is not None:
+            is_ocr_mocked = self.classifier._ocr.mock_mode
+
+        if is_classifier_mocked or is_ocr_mocked or result.confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD:
             result.needs_review = True
             # When LayoutLMv3 confidence is low (e.g. OCR unavailable), try
             # asking the vision LLM directly — it sees the image and can
