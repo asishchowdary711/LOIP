@@ -205,6 +205,14 @@ async def current_mode():
     return {"real_models": real, "mode_label": _mode_label(real)}
 
 
+@router.get("/liveness/warmup")
+async def liveness_warmup():
+    """Eagerly load InsightFace buffalo_l so the first webcam frame doesn't pay
+    the cold-start cost. Called by start-demo.sh after the backend is ready."""
+    app = _get_face_app()
+    return {"ready": app is not None}
+
+
 @router.post("/liveness")
 async def liveness_check(request: Request):
     """Receive a base64-encoded webcam frame, run InsightFace face analysis,
