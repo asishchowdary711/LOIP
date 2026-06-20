@@ -1,5 +1,8 @@
+import logging
 import numpy as np
 from loip.domains.document_intel.schemas import OCRResult, OCRBox
+
+logger = logging.getLogger(__name__)
 
 class PaddleOCRWrapper:
     def __init__(self, mock_mode: bool = True):
@@ -10,7 +13,7 @@ class PaddleOCRWrapper:
                 from paddleocr import PaddleOCR
                 self.engine = PaddleOCR(use_angle_cls=True, lang='en')
             except ImportError:
-                print("PaddleOCR not installed. Falling back to mock mode.")
+                logger.warning("PaddleOCR not installed. Falling back to mock mode.")
                 self.mock_mode = True
                 
     def extract(self, image: np.ndarray) -> OCRResult:

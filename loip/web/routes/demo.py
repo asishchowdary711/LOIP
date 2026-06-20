@@ -153,13 +153,17 @@ def _extract_fields_by_class(pipeline, images: list[np.ndarray]) -> dict[str, di
     to cross-check against the typed form. (Mock extraction returns canned values,
     so this is only meaningful — and only invoked — when real models are active.)"""
     by_class: dict[str, dict] = {}
-    for img in images:
+    for idx, img in enumerate(images):
         try:
+            logger.info("Processing document index %d: shape=%s", idx, img.shape)
             result = pipeline.doc_processor.process(img)
             doc_class = result["classification"].document_class.value
-            by_class[doc_class] = {f.name: f.value for f in result["extraction"].fields}
+            logger.info("Document index %d classified as: %s (confidence=%.2f)", idx, doc_class, result["classification"].confidence)
+            fields = {f.name: f.value for f in result["extraction"].fields}
+            logger.info("Document index %d extracted fields: %s", idx, fields)
+            by_class[doc_class] = fields
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Extraction pass failed for a document: %s", exc)
+            logger.warning("Extraction pass failed for document index %d: %s", idx, exc)
     return by_class
 
 

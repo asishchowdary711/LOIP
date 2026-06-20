@@ -20,6 +20,8 @@ dist/
 # Virtual environments
 .venv/
 .venv-*/
+.headroom-venv/
+scripts/headroom-proxy.sh
 venv/
 env/
 
