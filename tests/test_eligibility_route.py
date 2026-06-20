@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 from loip.web.api import app
 
@@ -10,9 +9,8 @@ def test_eligibility_valid_salary():
     assert resp.status_code == 200
     data = resp.json()
     assert data["salary"] == 35_000
-    assert data["max_principal"] == 840_000
-    assert data["rate_pa"] == 0.12
-    assert data["tenure_months"] == [12, 24, 36, 48, 60]
+    assert data["max_principal"] == 752_000
+    assert "FOIR" in data["rationale"]
 
 
 def test_eligibility_salary_too_low():

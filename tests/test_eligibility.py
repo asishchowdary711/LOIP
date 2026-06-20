@@ -5,21 +5,18 @@ from loip.services.eligibility import calculate_eligibility
 def test_basic_salary():
     result = calculate_eligibility(25_000)
     assert result["salary"] == 25_000
-    assert result["max_principal"] == 600_000
-    assert result["multiplier"] == 24
-    assert result["rate_pa"] == 0.12
-    assert result["tenure_months"] == [12, 24, 36, 48, 60]
+    assert result["max_principal"] == 537_000
+    assert "FOIR" in result["rationale"]
 
 
-def test_high_salary_hits_cap():
+def test_mid_salary():
+    result = calculate_eligibility(50_000)
+    assert result["max_principal"] == 10_74_000
+
+
+def test_high_salary_no_artificial_cap():
     result = calculate_eligibility(200_000)
-    assert result["max_principal"] == 40_00_000
-
-
-def test_exact_cap_boundary():
-    # salary * 24 == 40L exactly at salary = 166667
-    result = calculate_eligibility(166_667)
-    assert result["max_principal"] == min(166_667 * 24, 40_00_000)
+    assert result["max_principal"] == 42_97_000
 
 
 def test_salary_below_minimum_raises():

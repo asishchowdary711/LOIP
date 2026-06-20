@@ -1,3 +1,5 @@
+> **Revised 2026-06-21:** This spec was superseded by [`check-your-eligibility-not-lovely-noodle`](/Users/asishchowdary/.claude/plans/check-your-eligibility-not-lovely-noodle.md) — the standalone widget was replaced with an inline hint on the existing `monthly_income` field, and the math switched to the FOIR-based formula used by `AffordabilityProcessor`. The slider/tenure/EMI UI was removed (user only wanted a max-amount hint).
+
 # Loan Eligibility Suggestions — Design Spec
 
 **Date:** 2026-06-20

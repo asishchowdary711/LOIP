@@ -290,83 +290,18 @@
   
   @media(max-width:720px){.g2,.g3,.uploads,.chips{grid-template-columns:1fr}}
 
-  /* Eligibility Widget */
-  .elig{
-    padding:28px 32px;border-bottom:1px solid var(--line);
-    background:linear-gradient(135deg, rgba(16,185,129,0.03) 0%, rgba(99,102,241,0.03) 100%);
+  /* Eligibility hint (inline, below loan_amount) */
+  .elig-hint{
+    font-size:.82rem;color:var(--muted);margin-top:6px;line-height:1.4;
+    display:none;font-weight:500;
   }
-  .elig .elig-input{
-    display:flex;gap:14px;align-items:flex-end;
+  .elig-hint.show{display:block;animation:fadeIn 0.3s ease-out}
+  .elig-hint strong{color:var(--accent-2);font-weight:700}
+  .elig-hint a{
+    color:var(--accent-2);font-weight:700;text-decoration:none;
+    border-bottom:1px dashed currentColor;cursor:pointer;margin-left:6px;
   }
-  .elig .elig-input .field{flex:1}
-  .elig .elig-result{
-    display:none;margin-top:22px;
-    animation: fadeIn 0.4s ease-out;
-  }
-  .elig .elig-result.show{display:block}
-  .elig .elig-headline{
-    font-size:1.15rem;font-weight:800;color:var(--text-heading);
-    margin-bottom:18px;
-  }
-  .elig .elig-headline span{color:var(--accent-2)}
-  .elig .tenure-btns{
-    display:flex;gap:8px;margin-bottom:18px;
-  }
-  .elig .tenure-btns button{
-    flex:1;padding:10px 0;border:1.5px solid var(--line);border-radius:10px;
-    background:var(--panel-2);color:var(--muted);font-size:.88rem;font-weight:700;
-    cursor:pointer;transition:all .2s;font-family:inherit;
-  }
-  .elig .tenure-btns button:hover{border-color:var(--accent);color:var(--text)}
-  .elig .tenure-btns button.active{
-    border-color:var(--accent);background:var(--accent-soft);color:var(--accent-2);
-    box-shadow:0 0 8px var(--accent-soft);
-  }
-  .elig .slider-row{
-    display:flex;align-items:center;gap:16px;margin-bottom:14px;
-  }
-  .elig .slider-row input[type=range]{
-    flex:1;-webkit-appearance:none;appearance:none;height:6px;
-    background:var(--panel-2);border-radius:3px;outline:none;border:1px solid var(--line);
-  }
-  .elig .slider-row input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;width:22px;height:22px;border-radius:50%;
-    background:var(--accent);cursor:pointer;border:3px solid var(--bg);
-    box-shadow:0 0 8px var(--accent-soft);
-  }
-  .elig .slider-row .slider-val{
-    font-size:1.1rem;font-weight:800;color:var(--accent-2);
-    min-width:120px;text-align:right;font-family:'JetBrains Mono',monospace;
-  }
-  .elig .emi-display{
-    display:flex;gap:24px;align-items:baseline;margin:18px 0;
-    padding:16px 20px;background:var(--panel-2);border:1px solid var(--line);
-    border-radius:12px;
-  }
-  .elig .emi-display .emi-main{
-    font-size:1.6rem;font-weight:800;color:var(--text-heading);
-    font-family:'JetBrains Mono',monospace;
-  }
-  .elig .emi-display .emi-label{
-    font-size:.82rem;color:var(--muted);font-weight:600;
-  }
-  .elig .emi-display .emi-interest{
-    font-size:.88rem;color:var(--muted);font-weight:500;
-  }
-  .elig .elig-cta{
-    width:100%;padding:14px;border:none;border-radius:10px;
-    background:linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    color:#fff;font-size:1rem;font-weight:700;cursor:pointer;
-    transition:all .3s;font-family:inherit;
-    box-shadow:0 4px 14px var(--accent-soft);
-  }
-  .elig .elig-cta:hover{
-    transform:translateY(-1px);
-    box-shadow:0 6px 18px rgba(16,185,129,0.3);
-  }
-  .elig .elig-error{
-    color:var(--bad);font-size:.82rem;margin-top:8px;font-weight:500;
-  }
+  .elig-hint a:hover{color:var(--text-heading)}
 </style>
 </head>
 <body>
@@ -378,44 +313,6 @@
     </div>
 
     <div class="modebar" id="modebar"><span class="dot"></span><span id="modetext">Checking processing mode…</span></div>
-
-    <!-- ============ ELIGIBILITY WIDGET ============ -->
-    <div class="elig" id="eligWidget">
-      <div class="section-title"><span class="sq"></span> Check your eligibility</div>
-      <div class="elig-input">
-        <div class="field"><label>Monthly net salary (₹)</label>
-          <input id="eligSalary" type="number" placeholder="e.g. 50000" min="10000">
-        </div>
-        <button type="button" class="btn" id="eligCheckBtn" style="height:47px;margin-bottom:1px;padding:0 24px;font-size:.9rem">Check</button>
-      </div>
-      <div class="elig-error" id="eligError"></div>
-      <div class="elig-result" id="eligResult">
-        <div class="elig-headline">You're eligible for up to <span id="eligMax">—</span></div>
-        <div style="font-size:.82rem;color:var(--muted);font-weight:600;margin-bottom:10px">Select tenure</div>
-        <div class="tenure-btns" id="tenureBtns"></div>
-        <div style="font-size:.82rem;color:var(--muted);font-weight:600;margin-bottom:10px">Choose loan amount</div>
-        <div class="slider-row">
-          <span style="font-size:.78rem;color:var(--faint)">₹50K</span>
-          <input type="range" id="eligSlider" min="50000" step="10000">
-          <span class="slider-val" id="eligSliderVal">—</span>
-        </div>
-        <div class="emi-display">
-          <div>
-            <div class="emi-label">Monthly EMI</div>
-            <div class="emi-main" id="eligEmi">—</div>
-          </div>
-          <div>
-            <div class="emi-label">Total interest</div>
-            <div class="emi-interest" id="eligInterest">—</div>
-          </div>
-          <div>
-            <div class="emi-label">Rate</div>
-            <div class="emi-interest">12% p.a.</div>
-          </div>
-        </div>
-        <button type="button" class="elig-cta" id="eligCta">Apply for — over — →</button>
-      </div>
-    </div>
 
     <!-- ============ FORM VIEW ============ -->
     <div class="body" id="formView">
@@ -506,104 +403,37 @@
 </div>
 
 <script>
-/* ---------- eligibility widget ---------- */
+/* ---------- inline eligibility hint (driven by monthly_income field) ---------- */
 (function(){
-  const salaryInput = document.getElementById('eligSalary');
-  const checkBtn = document.getElementById('eligCheckBtn');
-  const resultDiv = document.getElementById('eligResult');
-  const errorDiv = document.getElementById('eligError');
-  const maxSpan = document.getElementById('eligMax');
-  const slider = document.getElementById('eligSlider');
-  const sliderVal = document.getElementById('eligSliderVal');
-  const emiEl = document.getElementById('eligEmi');
-  const interestEl = document.getElementById('eligInterest');
-  const ctaBtn = document.getElementById('eligCta');
-  const tenureBtnsDiv = document.getElementById('tenureBtns');
+  const incomeField = document.querySelector('[name="monthly_income"]');
+  const amountField = document.querySelector('[name="loan_amount"]');
+  if (!incomeField || !amountField) return;
 
-  let eligData = null;
-  let selectedTenure = 36;
+  const hint = document.createElement('div');
+  hint.className = 'elig-hint';
+  amountField.parentElement.appendChild(hint);
 
-  function fmtInr(n) {
-    return '₹' + Math.round(n).toLocaleString('en-IN');
-  }
-
-  function calcEmi(P, ratePA, months) {
-    const r = ratePA / 12;
-    if (r === 0) return P / months;
-    return P * r * Math.pow(1 + r, months) / (Math.pow(1 + r, months) - 1);
-  }
-
-  function updateEmi() {
-    if (!eligData) return;
-    const P = parseInt(slider.value);
-    const emi = calcEmi(P, eligData.rate_pa, selectedTenure);
-    const totalInterest = (emi * selectedTenure) - P;
-    sliderVal.textContent = fmtInr(P);
-    emiEl.textContent = fmtInr(emi) + '/mo';
-    interestEl.textContent = fmtInr(totalInterest);
-    ctaBtn.textContent = 'Apply for ' + fmtInr(P) + ' over ' + selectedTenure + ' months →';
-  }
-
-  function renderTenureButtons(tenures) {
-    tenureBtnsDiv.innerHTML = '';
-    tenures.forEach(function(t) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = t + ' mo';
-      if (t === selectedTenure) btn.className = 'active';
-      btn.addEventListener('click', function() {
-        selectedTenure = t;
-        tenureBtnsDiv.querySelectorAll('button').forEach(function(b) { b.className = ''; });
-        btn.className = 'active';
-        updateEmi();
-      });
-      tenureBtnsDiv.appendChild(btn);
-    });
-  }
+  function fmtInr(n) { return '₹' + n.toLocaleString('en-IN'); }
 
   async function checkEligibility() {
-    errorDiv.textContent = '';
-    resultDiv.classList.remove('show');
-    const salary = parseInt(salaryInput.value);
-    if (!salary || salary < 10000) {
-      errorDiv.textContent = 'Minimum salary ₹10,000 for personal loan eligibility';
-      return;
-    }
+    const salary = parseInt(incomeField.value);
+    if (!salary || salary < 10000) { hint.classList.remove('show'); return; }
     try {
       const resp = await fetch('/apply/eligibility?salary=' + salary);
-      if (!resp.ok) {
-        const err = await resp.json().catch(function() { return {}; });
-        errorDiv.textContent = err.detail || 'Please enter a valid salary';
-        return;
-      }
-      eligData = await resp.json();
-      maxSpan.textContent = fmtInr(eligData.max_principal);
-      slider.max = eligData.max_principal;
-      slider.value = Math.round(eligData.max_principal * 0.6);
-      selectedTenure = 36;
-      renderTenureButtons(eligData.tenure_months);
-      resultDiv.classList.add('show');
-      updateEmi();
-    } catch (e) {
-      errorDiv.textContent = 'Could not check eligibility. Please try again.';
-    }
+      if (!resp.ok) { hint.classList.remove('show'); return; }
+      const data = await resp.json();
+      hint.innerHTML = '✓ Eligible for up to <strong>' + fmtInr(data.max_principal) +
+        '</strong> based on your income. <a data-elig-fill>Use this amount</a>';
+      hint.classList.add('show');
+      hint.querySelector('[data-elig-fill]').addEventListener('click', function(e) {
+        e.preventDefault();
+        amountField.value = data.max_principal;
+        amountField.dispatchEvent(new Event('input', {bubbles: true}));
+      });
+    } catch (e) { hint.classList.remove('show'); }
   }
 
-  checkBtn.addEventListener('click', checkEligibility);
-  salaryInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); checkEligibility(); }
-  });
-  slider.addEventListener('input', updateEmi);
-
-  ctaBtn.addEventListener('click', function() {
-    if (!eligData) return;
-    const P = parseInt(slider.value);
-    const incomeField = document.querySelector('[name="monthly_income"]');
-    const amountField = document.querySelector('[name="loan_amount"]');
-    if (incomeField) { incomeField.value = eligData.salary; incomeField.dispatchEvent(new Event('input', {bubbles: true})); }
-    if (amountField) { amountField.value = P; amountField.dispatchEvent(new Event('input', {bubbles: true})); }
-    document.getElementById('formView').scrollIntoView({behavior: 'smooth'});
-  });
+  incomeField.addEventListener('blur', checkEligibility);
 })();
 
 /* ---------- document slots ---------- */

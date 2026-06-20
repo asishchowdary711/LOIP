@@ -1,3 +1,5 @@
+> **Revised 2026-06-21:** Tasks 1–3 of this plan were completed, then the design was reworked. See [`check-your-eligibility-not-lovely-noodle`](/Users/asishchowdary/.claude/plans/check-your-eligibility-not-lovely-noodle.md) — the standalone widget was deleted, the eligibility hint was hooked to the existing `monthly_income` field, and the math switched to the project's FOIR formula.
+
 # Loan Eligibility Widget — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
