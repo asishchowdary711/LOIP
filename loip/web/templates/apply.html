@@ -420,8 +420,9 @@
     if (!salary || salary < 10000) { hint.classList.remove('show'); return; }
     try {
       const resp = await fetch('/apply/eligibility?salary=' + salary);
-      if (!resp.ok) { hint.classList.remove('show'); return; }
+      if (!resp.ok) { console.warn('[eligibility]', resp.status, await resp.text()); hint.classList.remove('show'); return; }
       const data = await resp.json();
+      if (typeof data.max_principal !== 'number') { console.warn('[eligibility] unexpected response', data); hint.classList.remove('show'); return; }
       hint.innerHTML = '✓ Eligible for up to <strong>' + fmtInr(data.max_principal) +
         '</strong> based on your income. <a data-elig-fill>Use this amount</a>';
       hint.classList.add('show');
@@ -430,9 +431,14 @@
         amountField.value = data.max_principal;
         amountField.dispatchEvent(new Event('input', {bubbles: true}));
       });
-    } catch (e) { hint.classList.remove('show'); }
+    } catch (e) { console.warn('[eligibility] fetch failed', e); hint.classList.remove('show'); }
   }
 
+  let debounceTimer;
+  incomeField.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(checkEligibility, 400);
+  });
   incomeField.addEventListener('blur', checkEligibility);
 })();
 
