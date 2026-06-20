@@ -600,10 +600,8 @@
     const P = parseInt(slider.value);
     const incomeField = document.querySelector('[name="monthly_income"]');
     const amountField = document.querySelector('[name="loan_amount"]');
-    if (incomeField) incomeField.value = eligData.salary;
-    if (amountField) amountField.value = P;
-    incomeField.dispatchEvent(new Event('input', {bubbles: true}));
-    amountField.dispatchEvent(new Event('input', {bubbles: true}));
+    if (incomeField) { incomeField.value = eligData.salary; incomeField.dispatchEvent(new Event('input', {bubbles: true})); }
+    if (amountField) { amountField.value = P; amountField.dispatchEvent(new Event('input', {bubbles: true})); }
     document.getElementById('formView').scrollIntoView({behavior: 'smooth'});
   });
 })();
