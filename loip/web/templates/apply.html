@@ -659,22 +659,35 @@ form.addEventListener('submit',async e=>{
 });
 
 function finalizeRows(rows,res){
-  const flags=(res.review_flags||[]).join(' ').toLowerCase();
+  // Per-doc badge state. Default to OK; only warn on a CONCRETE signal from
+  // the doc cross-check (`res.mismatches`). External-bureau reason codes
+  // like `aadhaar_verification_failed` are mocked and would otherwise wave
+  // a false warning even when the typed values match the actual document.
+  const mismatches=(res.mismatches||[]).map(m=>String(m).toLowerCase());
+  const hasMismatch=(...needles)=>mismatches.some(m=>needles.some(n=>m.includes(n)));
   const reasons=(res.reason_codes||[]).map(c=>(c.category||'')+' '+(c.code||'')).join(' ').toLowerCase();
+  const flags=(res.review_flags||[]).join(' ').toLowerCase();
   const blob=flags+' '+reasons;
+
   const statuses={
     aadhaar:{cls:'ok',txt:'Identity verified'},
     pan:{cls:'ok',txt:'PAN format valid'},
     salary_slip:{cls:'ok',txt:'Income cross-checked'},
     bank_statement:{cls:'ok',txt:'Statement parsed'},
   };
-  if(blob.includes('identity')||blob.includes('kyc')||blob.includes('aadhaar'))
-    statuses.aadhaar={cls:'warn',txt:'Identity needs review'};
-  if(blob.includes('income')||blob.includes('affordab')){
+
+  if(hasMismatch('aadhaar'))
+    statuses.aadhaar={cls:'warn',txt:'Aadhaar mismatch — please review'};
+  if(hasMismatch('pan'))
+    statuses.pan={cls:'warn',txt:'PAN mismatch — please review'};
+  if(hasMismatch('income')||hasMismatch('salary')||hasMismatch('net pay'))
     statuses.salary_slip={cls:'warn',txt:'Income variance flagged'};
-    statuses.bank_statement={cls:'warn',txt:'Minor: salary credit variance'};
-  }
-  if(blob.includes('fraud')||blob.includes('forgery'))
+  if(hasMismatch('bank')||hasMismatch('statement')||hasMismatch('credit'))
+    statuses.bank_statement={cls:'warn',txt:'Statement variance flagged'};
+
+  // Tampering/forgery is a hard fraud signal — keep escalating it even if
+  // the cross-check happens to be quiet.
+  if(blob.includes('fraud')||blob.includes('forgery')||blob.includes('tamper'))
     statuses.pan={cls:'bad',txt:'Possible tampering'};
   SLOTS.forEach(s=>{
     const r=rows[s.key];const st=statuses[s.key];

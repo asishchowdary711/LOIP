@@ -147,12 +147,17 @@ def _get_pipeline(real_active: bool):
     return _real_pipeline
 
 
-def _extract_fields_by_class(pipeline, images: list[np.ndarray]) -> dict[str, dict]:
-    """Run document classification + field extraction per image and collect the
-    fields keyed by document class. Used in real mode to show "what we read" and
-    to cross-check against the typed form. (Mock extraction returns canned values,
-    so this is only meaningful — and only invoked — when real models are active.)"""
+def _extract_fields_by_class(
+    pipeline, images: list[np.ndarray]
+) -> tuple[dict[str, dict], list[str]]:
+    """Run document classification + field extraction per image. Returns:
+    - by_class: per-document-class structured fields (what the VL model parsed)
+    - ocr_texts: raw OCR text for every uploaded document (used as a fallback
+      when the VL model misses a field — we substring-search the typed PAN /
+      Aadhaar / name against the concatenated OCR of all docs).
+    """
     by_class: dict[str, dict] = {}
+    ocr_texts: list[str] = []
     for idx, img in enumerate(images):
         try:
             logger.info("Processing document index %d: shape=%s", idx, img.shape)
@@ -162,34 +167,96 @@ def _extract_fields_by_class(pipeline, images: list[np.ndarray]) -> dict[str, di
             fields = {f.name: f.value for f in result["extraction"].fields}
             logger.info("Document index %d extracted fields: %s", idx, fields)
             by_class[doc_class] = fields
+
+            # Pull raw OCR text from whichever OCR engine the pipeline used.
+            ocr = result.get("ocr")
+            raw_text = ""
+            if ocr is not None:
+                raw_text = getattr(ocr, "raw_text", "") or ""
+                # OCRConflict (primary vs secondary disagree) exposes both;
+                # join them so the fallback search sees as much text as possible.
+                if not raw_text:
+                    for attr in ("primary", "secondary"):
+                        sub = getattr(ocr, attr, None)
+                        if sub is not None:
+                            raw_text += " " + (getattr(sub, "raw_text", "") or "")
+            ocr_texts.append(raw_text)
+            if raw_text:
+                logger.info("Document index %d OCR raw text (%d chars): %s",
+                            idx, len(raw_text), raw_text[:200].replace("\n", " "))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Extraction pass failed for document index %d: %s", idx, exc)
-    return by_class
+            ocr_texts.append("")
+    return by_class, ocr_texts
 
 
 def _normalize(value) -> str:
     return "".join(str(value).split()).upper()
 
 
-def _cross_check(form: dict, extracted: dict[str, dict]) -> list[str]:
+def _ocr_contains(ocr_texts: list[str], needle: str) -> bool:
+    """Substring search across all uploaded documents' OCR text. Spaces,
+    dashes, and case are ignored so '3042 8897 1384' matches '304288971384'."""
+    if not needle:
+        return False
+    needle = _normalize(needle).replace("-", "")
+    for text in ocr_texts:
+        if not text:
+            continue
+        haystack = _normalize(text).replace("-", "")
+        if needle in haystack:
+            return True
+    return False
+
+
+def _cross_check(
+    form: dict,
+    extracted: dict[str, dict],
+    ocr_texts: list[str] | None = None,
+) -> list[str]:
     """Compare typed PAN / Aadhaar numbers against what the models read from the
-    uploaded documents. Returns human-readable mismatch messages."""
+    uploaded documents. If the structured VL extraction misses a field, fall back
+    to substring-matching the typed value against the raw OCR text of every doc
+    (PaddleOCR / Surya pull text even when the VL model fails to label it).
+    Returns human-readable mismatch messages."""
+    ocr_texts = ocr_texts or []
     mismatches: list[str] = []
+
     typed_pan = _normalize(form.get("pan_number", ""))
     read_pan = _normalize(extracted.get("pan", {}).get("pan_number", ""))
     if typed_pan:
-        if not read_pan:
-            mismatches.append("Could not extract PAN number from the uploaded PAN document.")
-        elif typed_pan != read_pan:
-            mismatches.append(f"PAN on document ({read_pan}) does not match the PAN you entered ({typed_pan}).")
+        if read_pan:
+            if typed_pan != read_pan:
+                mismatches.append(f"PAN on document ({read_pan}) does not match the PAN you entered ({typed_pan}).")
+        elif _ocr_contains(ocr_texts, typed_pan):
+            logger.info("PAN %s found via OCR-text fallback (VL extraction missed it)", typed_pan)
+        else:
+            mismatches.append("Could not find your PAN number anywhere in the uploaded documents.")
 
     typed_aadhaar = _normalize(form.get("aadhaar_number", "")).replace("-", "")
     read_aadhaar = _normalize(extracted.get("aadhaar", {}).get("aadhaar_number", "")).replace("-", "")
     if typed_aadhaar:
-        if not read_aadhaar:
-            mismatches.append("Could not extract Aadhaar number from the uploaded Aadhaar document.")
-        elif typed_aadhaar != read_aadhaar:
-            mismatches.append(f"Aadhaar number on document ({read_aadhaar}) does not match the number you entered ({typed_aadhaar}).")
+        if read_aadhaar:
+            if typed_aadhaar != read_aadhaar:
+                mismatches.append(f"Aadhaar number on document ({read_aadhaar}) does not match the number you entered ({typed_aadhaar}).")
+        elif _ocr_contains(ocr_texts, typed_aadhaar):
+            logger.info("Aadhaar %s found via OCR-text fallback (VL extraction missed it)", typed_aadhaar)
+        else:
+            mismatches.append("Could not find your Aadhaar number anywhere in the uploaded documents.")
+
+    # Name cross-check — if a typed name fragment doesn't appear in any doc's
+    # OCR text, flag it. We split on spaces and require at least the longest
+    # token (likely the surname) to show up somewhere.
+    typed_name = (form.get("full_name") or "").strip()
+    if typed_name and ocr_texts:
+        tokens = [t for t in typed_name.split() if len(t) >= 3]
+        if tokens:
+            longest = max(tokens, key=len)
+            if not _ocr_contains(ocr_texts, longest):
+                mismatches.append(
+                    f"Your name ({typed_name}) does not appear in any uploaded document. "
+                    "Please ensure the documents belong to the applicant."
+                )
     return mismatches
 
 
@@ -449,8 +516,8 @@ async def submit_application(
     extracted_fields: dict[str, dict] = {}
     mismatches: list[str] = []
     if real_active:
-        extracted_fields = _extract_fields_by_class(pipeline, images)
-        mismatches = _cross_check(form, extracted_fields)
+        extracted_fields, ocr_texts = _extract_fields_by_class(pipeline, images)
+        mismatches = _cross_check(form, extracted_fields, ocr_texts=ocr_texts)
 
     try:
         decision = await pipeline.execute(
