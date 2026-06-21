@@ -1,3 +1,5 @@
+import asyncio
+
 import numpy as np
 from loip.pipelines.base import BasePipeline
 from loip.schemas.decision import LoanApplication, OnboardingDecision
@@ -40,8 +42,16 @@ class OnboardingPipeline(BasePipeline):
         qr_results: dict = {}
         source_image_bytes_by_class: dict[str, bytes] = {}
         images_by_class: dict[str, np.ndarray] = {}
-        for i, img in enumerate(images):
-            doc_result = self.doc_processor.process(img)
+
+        # Document intelligence is the slow stage (each Qwen call is a network
+        # round-trip to Ollama). Run all documents concurrently — the cache in
+        # DocumentIntelligenceProcessor is keyed by image hash and tolerant of
+        # concurrent writes (idempotent), so this is safe.
+        doc_results = await asyncio.gather(
+            *(asyncio.to_thread(self.doc_processor.process, img) for img in images)
+        )
+
+        for i, (img, doc_result) in enumerate(zip(images, doc_results)):
             doc_class = doc_result["classification"].document_class.value
             fields = {}
             for f in doc_result["extraction"].fields:
@@ -75,6 +85,7 @@ class OnboardingPipeline(BasePipeline):
             qr_results=qr_results,
             source_image_bytes=source_image_bytes_by_class,
             images_by_class=images_by_class,
+            extracted_by_class=extracted_data,
         )
         await emit(Topic.IDENTITY_VERIFIED, {
             "identity_confidence": identity_result.identity_confidence,
@@ -87,6 +98,7 @@ class OnboardingPipeline(BasePipeline):
             segment=application.employment_type,
             application_employer_name=application.employer_name,
             document_ids=document_ids,
+            declared_monthly_income=application_data.get("declared_monthly_income"),
         )
         await emit(Topic.INCOME_RECONCILED, {
             "verified_monthly_income": income_result.verified_monthly_income,

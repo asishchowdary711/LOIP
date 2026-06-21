@@ -1,10 +1,19 @@
 """Evidence/traceability API routes — evidence chains and source-location lookups."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 
 from loip.web.auth import AuthenticatedUser, require_permission
 
 router = APIRouter(prefix="/evidence", tags=["Evidence"])
+
+
+_CONTENT_TYPES = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "pdf": "application/pdf",
+}
 
 
 @router.get("/{application_id}/chains")
@@ -68,3 +77,36 @@ async def get_field_source(
         status_code=404,
         detail=f"No source location found for field '{field_name}' on application {application_id}",
     )
+
+
+@router.get("/document/{document_id:path}")
+async def get_document(
+    document_id: str,
+    user: AuthenticatedUser = Depends(require_permission("audit:read")),
+):
+    """Stream the raw bytes of a stored source document so a reviewer can
+    click an evidence chain back to the actual PDF/image that produced the
+    field. Works against either the MinIO store or the local filesystem
+    fallback — both expose ``"<bucket>/<uuid>.<ext>"`` ids."""
+    from loip.web.routes.onboard import document_store
+
+    if document_store is None:
+        raise HTTPException(status_code=503, detail="Document store not initialised")
+
+    # Reject anything that doesn't look like "<bucket>/<filename>" before we
+    # touch the backend — the local store already blocks path traversal, but
+    # we want a tight 400 here rather than a 404 from a malformed id.
+    bucket, _, object_name = document_id.partition("/")
+    if not bucket or not object_name or "/" in object_name or ".." in object_name:
+        raise HTTPException(status_code=400, detail="Invalid document_id")
+
+    if not document_store.exists(document_id):
+        raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
+
+    try:
+        data = document_store.get(document_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to read document: {exc}")
+
+    ext = object_name.rsplit(".", 1)[-1].lower() if "." in object_name else ""
+    return Response(content=data, media_type=_CONTENT_TYPES.get(ext, "application/octet-stream"))

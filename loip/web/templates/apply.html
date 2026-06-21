@@ -711,15 +711,28 @@ form.addEventListener('submit',async e=>{
 });
 
 function finalizeRows(rows,res){
-  // Per-doc badge state. Default to OK; only warn on a CONCRETE signal from
-  // the doc cross-check (`res.mismatches`). External-bureau reason codes
-  // like `aadhaar_verification_failed` are mocked and would otherwise wave
-  // a false warning even when the typed values match the actual document.
+  // Per-doc badge state. Default to OK; warn only on a CONCRETE signal that
+  // points at the specific document. External-bureau reason codes like
+  // `aadhaar_verification_failed` are mocked and would otherwise wave a
+  // false warning even when the typed values match the actual document.
   const mismatches=(res.mismatches||[]).map(m=>String(m).toLowerCase());
   const hasMismatch=(...needles)=>mismatches.some(m=>needles.some(n=>m.includes(n)));
-  const reasons=(res.reason_codes||[]).map(c=>(c.category||'')+' '+(c.code||'')).join(' ').toLowerCase();
-  const flags=(res.review_flags||[]).join(' ').toLowerCase();
-  const blob=flags+' '+reasons;
+
+  // Identity-document tampering is its own dedicated signal in
+  // identity_result.tamper_flags. Only these specifically mean "the
+  // ID image looks doctored" — NOT a general high fraud_score, which is
+  // a decision-level signal (e.g. velocity, income misstatement).
+  const tamperFlags=(res.identity_tamper_flags||[]).map(f=>String(f).toLowerCase());
+  const idTampered=tamperFlags.some(f=>
+    f==='document_metadata_anomaly'||
+    f==='qr_tampered'||
+    f==='qr_signature_invalid');
+  const incomeFlags=(res.income_anomaly_flags||[]).map(f=>String(f).toLowerCase());
+  const incomeMismatch=incomeFlags.some(f=>
+    f==='income_declaration_mismatch'||
+    f==='income_inflation'||
+    f==='income_deflation'||
+    f==='salary_slip_vs_bank_mismatch');
 
   const statuses={
     aadhaar:{cls:'ok',txt:'Identity verified'},
@@ -732,15 +745,17 @@ function finalizeRows(rows,res){
     statuses.aadhaar={cls:'warn',txt:'Aadhaar mismatch — please review'};
   if(hasMismatch('pan'))
     statuses.pan={cls:'warn',txt:'PAN mismatch — please review'};
-  if(hasMismatch('income')||hasMismatch('salary')||hasMismatch('net pay'))
+  if(hasMismatch('income')||hasMismatch('salary')||hasMismatch('net pay')||incomeMismatch)
     statuses.salary_slip={cls:'warn',txt:'Income variance flagged'};
   if(hasMismatch('bank')||hasMismatch('statement')||hasMismatch('credit'))
     statuses.bank_statement={cls:'warn',txt:'Statement variance flagged'};
 
-  // Tampering/forgery is a hard fraud signal — keep escalating it even if
-  // the cross-check happens to be quiet.
-  if(blob.includes('fraud')||blob.includes('forgery')||blob.includes('tamper'))
+  // Real tampering ONLY when the identity-trust layer raised a tamper flag
+  // on the actual ID document — not just because the decision happens to
+  // mention "fraud" somewhere (that's the decision-level callout, below).
+  if(idTampered)
     statuses.pan={cls:'bad',txt:'Possible tampering'};
+
   SLOTS.forEach(s=>{
     const r=rows[s.key];const st=statuses[s.key];
     r.classList.add(st.cls);
@@ -762,7 +777,17 @@ function showDecision(res){
   document.getElementById('decisionTitle').textContent=titles[d]||'Decision';
   document.getElementById('decisionText').textContent=texts[d]||'';
   const risk=res.risk_score!=null?` · Risk score ${(res.risk_score*100).toFixed(0)}/100`:'';
-  const mism=(res.mismatches||[]).map(m=>`<div class="mismatch">⚠ ${m}</div>`).join('');
+  // Surface high fraud score as its own decision-level callout so the user
+  // sees WHY a reject happened (no longer mis-attributed to PAN).
+  const decisionLevel=[];
+  if(typeof res.fraud_score==='number' && res.fraud_score>0.80)
+    decisionLevel.push(`⚠ Fraud risk score ${(res.fraud_score*100).toFixed(0)}/100 — exceeds threshold`);
+  (res.reason_codes||[]).forEach(c=>{
+    if(c.code==='high_fraud_risk')
+      decisionLevel.push(`⚠ Hard fraud reject (model score ${c.detail||''})`);
+  });
+  const mism=[...decisionLevel.map(m=>`<div class="mismatch">${m}</div>`),
+              ...(res.mismatches||[]).map(m=>`<div class="mismatch">⚠ ${m}</div>`)].join('');
   document.getElementById('decisionMeta').innerHTML=
     mism+`<div>Application <b>${res.application_id}</b>${risk}</div>`+
     `<a class="statuslink" href="${res.status_url||('/apply/status/'+res.application_id)}">Track this application →</a>`;

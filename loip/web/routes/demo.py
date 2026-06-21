@@ -137,32 +137,70 @@ def _get_pipeline(real_active: bool):
         return onboard_routes.pipeline
     if _real_pipeline is None:
         from loip.domains.document_intel.processor import DocumentIntelligenceProcessor
+        from loip.domains.identity_trust.processor import IdentityTrustProcessor
+        from loip.domains.income_intel.processor import IncomeIntelligenceProcessor
+        from loip.domains.affordability.processor import AffordabilityProcessor
+        from loip.domains.fraud.processor import FraudIntelligenceProcessor
+        from loip.domains.risk_decisioning.processor import RiskDecisionProcessor
         from loip.pipelines.onboarding import OnboardingPipeline
 
-        logger.info("Building real-document-intelligence pipeline (external clients mocked)")
+        logger.info("Building real ML pipeline (external bureau/identity clients still mocked)")
         pipeline = OnboardingPipeline(mock_mode=True)
         pipeline.doc_processor = DocumentIntelligenceProcessor(mock_mode=False)
+
+        # Real ML inference: BGE-M3 name matching, XGBoost/LightGBM/GraphSAGE
+        # scoring. External API clients (CIBIL/UIDAI/NSDL/DigiLocker) have no
+        # real endpoints configured, so we keep their .mock toggles on while
+        # the ML wrappers run in real mode.
+        identity = IdentityTrustProcessor(mock_mode=False)
+        identity.nsdl_client._mock = True
+        identity.uidai_client._mock = True
+        pipeline.identity_processor = identity
+        pipeline.income_processor = IncomeIntelligenceProcessor(mock_mode=False)
+        pipeline.affordability_processor = AffordabilityProcessor(mock_mode=False)
+        pipeline.fraud_processor = FraudIntelligenceProcessor(mock_mode=False)
+        pipeline.decision_processor = RiskDecisionProcessor(mock_mode=False)
+        # CIBIL bureau client stays mocked (no real endpoint).
+        pipeline.cibil_client._mock = True
         # Share the admin UI's review queue so customer cases appear live.
         pipeline.review_processor = review_routes.review_processor
         _real_pipeline = pipeline
     return _real_pipeline
 
 
-def _extract_fields_by_class(
+async def _extract_fields_by_class(
     pipeline, images: list[np.ndarray]
 ) -> tuple[dict[str, dict], list[str]]:
-    """Run document classification + field extraction per image. Returns:
+    """Run document classification + field extraction per image, concurrently.
+
+    Each Qwen call is a network round-trip to Ollama; running them in
+    parallel collapses the wall-clock cost from N×per-doc to ~per-doc.
+    Returns:
     - by_class: per-document-class structured fields (what the VL model parsed)
     - ocr_texts: raw OCR text for every uploaded document (used as a fallback
       when the VL model misses a field — we substring-search the typed PAN /
       Aadhaar / name against the concatenated OCR of all docs).
     """
+    import asyncio as _asyncio
+
     by_class: dict[str, dict] = {}
     ocr_texts: list[str] = []
-    for idx, img in enumerate(images):
+
+    async def _process_one(idx: int, img):
+        logger.info("Processing document index %d: shape=%s", idx, img.shape)
         try:
-            logger.info("Processing document index %d: shape=%s", idx, img.shape)
-            result = pipeline.doc_processor.process(img)
+            return idx, await _asyncio.to_thread(pipeline.doc_processor.process, img)
+        except Exception as exc:  # noqa: BLE001 - logged, treated as empty below
+            logger.warning("Extraction pass failed for document index %d: %s", idx, exc)
+            return idx, None
+
+    results = await _asyncio.gather(*(_process_one(i, img) for i, img in enumerate(images)))
+
+    for idx, result in results:
+        try:
+            if result is None:
+                ocr_texts.append("")
+                continue
             doc_class = result["classification"].document_class.value
             logger.info("Document index %d classified as: %s (confidence=%.2f)", idx, doc_class, result["classification"].confidence)
             fields = {f.name: f.value for f in result["extraction"].fields}
@@ -245,20 +283,79 @@ def _cross_check(
         else:
             mismatches.append("Could not find your Aadhaar number anywhere in the uploaded documents.")
 
-    # Name cross-check — if a typed name fragment doesn't appear in any doc's
-    # OCR text, flag it. We split on spaces and require at least the longest
-    # token (likely the surname) to show up somewhere.
+    # Name cross-check — the typed name's longest token (likely the surname)
+    # must appear somewhere we read it. Check both:
+    #   (a) raw OCR text across all docs (PaddleOCR / Surya), and
+    #   (b) the structured name fields Qwen extracted per doc class.
+    # The OCR path is unreliable here (PaddleOCR mocks out on Python 3.14, so
+    # raw OCR text is just "MOCK_TEXT") — without the structured fallback the
+    # check would falsely flag every real submission.
     typed_name = (form.get("full_name") or "").strip()
-    if typed_name and ocr_texts:
+    if typed_name:
         tokens = [t for t in typed_name.split() if len(t) >= 3]
         if tokens:
-            longest = max(tokens, key=len)
-            if not _ocr_contains(ocr_texts, longest):
+            longest = max(tokens, key=len).upper()
+            extracted_name_blob = " ".join(
+                str(v) for doc in extracted.values()
+                for k, v in (doc or {}).items()
+                if k in {"full_name", "employee_name", "account_holder_name",
+                         "fathers_name", "applicant_name"} and v
+            ).upper()
+            in_ocr = _ocr_contains(ocr_texts, longest) if ocr_texts else False
+            in_fields = longest in extracted_name_blob
+            if not in_ocr and not in_fields:
                 mismatches.append(
                     f"Your name ({typed_name}) does not appear in any uploaded document. "
                     "Please ensure the documents belong to the applicant."
                 )
+
+    # Income cross-check — the typed monthly income must agree with what the
+    # pay slip shows (and, when available, with the bank statement's salary
+    # credits). 10% tolerance covers HRA/bonus/round-off; anything beyond that
+    # is flagged so a fabricated income on the form cannot sail through.
+    typed_income = _to_float(form.get("monthly_income"))
+    if typed_income > 0:
+        slip = extracted.get("salary_slip", {}) or {}
+        slip_net = _to_float(slip.get("net_pay")) or _to_float(slip.get("gross_pay"))
+        if slip_net > 0:
+            delta = abs(typed_income - slip_net) / max(typed_income, slip_net)
+            if delta > 0.10:
+                direction = "higher" if typed_income > slip_net else "lower"
+                mismatches.append(
+                    f"Declared income ₹{typed_income:,.0f} is {direction} than the pay slip "
+                    f"net pay (₹{slip_net:,.0f}) by {delta*100:.0f}%."
+                )
+
+        bank = extracted.get("bank_statement", {}) or {}
+        bank_credits = bank.get("salary_credits") or []
+        if bank_credits:
+            amounts = [_to_float(c.get("amount")) for c in bank_credits if _to_float(c.get("amount")) > 0]
+            if amounts:
+                bank_avg = sum(amounts) / len(amounts)
+                delta_bank = abs(typed_income - bank_avg) / max(typed_income, bank_avg)
+                if delta_bank > 0.10:
+                    direction = "higher" if typed_income > bank_avg else "lower"
+                    mismatches.append(
+                        f"Declared income ₹{typed_income:,.0f} is {direction} than the bank "
+                        f"statement's average salary credit (₹{bank_avg:,.0f}) by {delta_bank*100:.0f}%."
+                    )
     return mismatches
+
+
+def _to_float(value) -> float:
+    """Parse a numeric value that may be a string with commas / lakh notation.
+    Returns 0.0 when the value cannot be interpreted as a positive number."""
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip().replace(",", "").replace("₹", "").replace(" ", "")
+    if not s:
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
 
 
 @router.get("", response_class=HTMLResponse)
@@ -271,6 +368,23 @@ async def current_mode():
     """Active document-model mode, so the UI can show a Real/Mock banner."""
     real = _real_models_active()
     return {"real_models": real, "mode_label": _mode_label(real)}
+
+
+@router.post("/_reset_fraud_graph")
+async def reset_fraud_graph():
+    """Clear the in-memory GraphSAGE application graph. Same applicant
+    re-submitting the same PAN/Aadhaar across many demo runs would otherwise
+    accumulate as a self-match and inflate fraud_score over time. Restarting
+    the server clears this too — this endpoint just lets you do it without
+    a restart."""
+    global _real_pipeline
+    cleared = 0
+    if _real_pipeline is not None:
+        try:
+            cleared = _real_pipeline.fraud_processor.graphsage.reset_graph()
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+    return JSONResponse({"ok": True, "cleared_nodes": cleared})
 
 
 @router.get("/liveness/warmup")
@@ -517,7 +631,7 @@ async def submit_application(
     extracted_fields: dict[str, dict] = {}
     mismatches: list[str] = []
     if real_active:
-        extracted_fields, ocr_texts = _extract_fields_by_class(pipeline, images)
+        extracted_fields, ocr_texts = await _extract_fields_by_class(pipeline, images)
         mismatches = _cross_check(form, extracted_fields, ocr_texts=ocr_texts)
 
     try:
@@ -571,6 +685,14 @@ async def submit_application(
     except OSError as exc:
         logger.warning("Could not persist demo application %s: %s", application_id, exc)
 
+    # Surface the structured per-domain signals so the UI can label rows
+    # precisely (e.g. show "Possible tampering" on PAN ONLY when an actual
+    # document tamper flag fires, not whenever the word "fraud" appears
+    # anywhere in the reason codes).
+    identity_payload = decision_payload.get("identity_result") or {}
+    income_payload = decision_payload.get("income_result") or {}
+    fraud_payload = decision_payload.get("fraud_result") or {}
+
     return JSONResponse(
         {
             "application_id": application_id,
@@ -579,6 +701,9 @@ async def submit_application(
             "loan_amount": decision_payload.get("loan_amount"),
             "reason_codes": decision_payload.get("reason_codes", []),
             "review_flags": decision_payload.get("review_flags", []),
+            "identity_tamper_flags": identity_payload.get("tamper_flags") or [],
+            "income_anomaly_flags": income_payload.get("anomaly_flags") or [],
+            "fraud_score": fraud_payload.get("fraud_score"),
             "documents_processed": accepted_documents,
             "documents_dropped": dropped_documents,
             "extracted_fields": extracted_fields,

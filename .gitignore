@@ -103,3 +103,9 @@ alembic/versions/__pycache__/
 # Cryptographic keys — never commit real keys to version control
 loip/keys/*.pem
 !loip/keys/uidai_public_key.pem
+
+# Large ML weights — exceed GitHub's 100 MB file limit. The wrapper
+# (loip/models/layoutlmv3_wrapper.py) falls back to BASE_MODEL on HuggingFace
+# when local weights are absent, so this is safe to drop from the repo.
+loip/models/checkpoints/layoutlmv3-finetuned/model.safetensors
+loip/models/checkpoints/donut-finetuned/model.safetensors

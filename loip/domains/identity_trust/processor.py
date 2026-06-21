@@ -33,6 +33,7 @@ class IdentityTrustProcessor:
         qr_results: dict | None = None,
         source_image_bytes: dict | None = None,
         images_by_class: dict | None = None,
+        extracted_by_class: dict | None = None,
     ) -> IdentityVerificationResult:
         result = IdentityVerificationResult(application_id=application_id, identity_confidence=1.0)
         
@@ -85,26 +86,42 @@ class IdentityTrustProcessor:
                 if not result.face_verified:
                     result.tamper_flags.append(IdentityFlag.FACE_MISMATCH)
 
-        # 3. Cross-check Names (PAN vs Aadhaar vs App)
-        name_sources = []
-        if "full_name" in extracted_fields:
-            name_sources.append(extracted_fields["full_name"])
-        if "full_name" in application_data:
-            name_sources.append(application_data["full_name"])
-            
-        if len(name_sources) >= 2:
-            sim = self.bge_m3.similarity(name_sources[0], name_sources[1])
+        # 3. Cross-check Names (PAN vs Aadhaar vs App) — semantic match via BGE-M3.
+        # Compare each document's name against the application form name, and
+        # PAN vs Aadhaar against each other. Mismatch raises a single flag once.
+        name_pairs: list[tuple[str, str, str]] = []  # (field_name, a, b)
+        app_name = application_data.get("full_name")
+        pan_name = (extracted_by_class or {}).get("pan", {}).get("full_name")
+        aadhaar_name = (extracted_by_class or {}).get("aadhaar", {}).get("full_name")
+        # Fallback to merged dict when per-class breakdown not supplied.
+        if pan_name is None and aadhaar_name is None and "full_name" in extracted_fields:
+            pan_name = extracted_fields["full_name"]
+
+        if pan_name and app_name:
+            name_pairs.append(("full_name_pan_vs_app", pan_name, app_name))
+        if aadhaar_name and app_name:
+            name_pairs.append(("full_name_aadhaar_vs_app", aadhaar_name, app_name))
+        if pan_name and aadhaar_name:
+            name_pairs.append(("full_name_pan_vs_aadhaar", pan_name, aadhaar_name))
+
+        any_name_mismatch = False
+        for field_name, a, b in name_pairs:
+            sim = self.bge_m3.similarity(a, b)
             match = EntityMatch(
-                field_name="full_name",
+                field_name=field_name,
                 sources=[],
                 similarity_score=sim,
                 threshold=0.85,
-                passed=sim >= 0.85
+                passed=sim >= 0.85,
             )
             result.entity_matches.append(match)
             if not match.passed:
-                result.tamper_flags.append(IdentityFlag.NAME_PAN_AADHAAR_MISMATCH)
-                result.mismatches.append("Name mismatch between documents/application")
+                any_name_mismatch = True
+                result.mismatches.append(
+                    f"Name similarity {sim:.2f} below 0.85 for {field_name} ('{a}' vs '{b}')"
+                )
+        if any_name_mismatch:
+            result.tamper_flags.append(IdentityFlag.NAME_PAN_AADHAAR_MISMATCH)
                 
         # DOB match
         dob_sources = []

@@ -1,4 +1,9 @@
+import json
+import logging
+
 from loip.models.xgboost_wrapper import XGBoostWrapper
+
+logger = logging.getLogger(__name__)
 from loip.schemas.evidence import (
     DocumentType,
     EvidenceChain,
@@ -12,7 +17,11 @@ from loip.schemas.income import IncomeFlag, IncomeResult, IncomeSource, SalaryCr
 
 class IncomeIntelligenceProcessor:
     def __init__(self, mock_mode: bool = True):
+        self.mock_mode = mock_mode
         self.xgboost = XGBoostWrapper(mock_mode=mock_mode)
+        # Stamp the right model version on every SourceLocation so audit logs
+        # can distinguish a real-extraction figure from a deterministic mock.
+        self._model_version = "qwen2.5-vl-mock" if mock_mode else "qwen2.5-vl:3b"
 
     def _doc_source(
         self, doc_type: str, field_name: str, value: float | str,
@@ -30,13 +39,13 @@ class IncomeIntelligenceProcessor:
             source=SourceLocation(
                 document_id=document_ids[doc_type],
                 document_type=DocumentType(doc_type),
-                is_synthetic=True,
+                is_synthetic=self.mock_mode,
                 extraction_method=ExtractionMethod.QWEN2_5_VL,
-                model_version="qwen2.5-vl-mock",
+                model_version=self._model_version,
             ),
         )]
 
-    def process_income(self, application_id: str, extracted_data: dict, segment: str = "salaried", application_employer_name: str | None = None, document_ids: dict | None = None) -> IncomeResult:
+    def process_income(self, application_id: str, extracted_data: dict, segment: str = "salaried", application_employer_name: str | None = None, document_ids: dict | None = None, declared_monthly_income: float | None = None) -> IncomeResult:
         result = IncomeResult(
             application_id=application_id,
             segment=segment,
@@ -154,11 +163,40 @@ class IncomeIntelligenceProcessor:
         # 4. Parse Bank Statement
         if "bank_statement" in extracted_data:
             stmt = extracted_data["bank_statement"]
-            if "salary_credits" in stmt:
-                credits = [SalaryCredit(**c) for c in stmt["salary_credits"]]
-            elif salary_slip_amount or itr_amount:
-                # Use the corroborated salary/income figure from other documents
-                # rather than a hardcoded default.
+            raw_credits = stmt.get("salary_credits")
+            if isinstance(raw_credits, str):
+                # Qwen returns JSON-encoded array via the VL extractor.
+                try:
+                    raw_credits = json.loads(raw_credits)
+                except (json.JSONDecodeError, ValueError):
+                    raw_credits = None
+            if isinstance(raw_credits, list) and raw_credits:
+                # Belt-and-braces: filter out anything whose narration screams
+                # "debit / loan EMI / charge" even if the VL model labelled it
+                # as a credit. These are signals of money OUT, not income IN.
+                _DEBIT_HINTS = ("emi", "loan", "loan repayment", "transfer out",
+                                "withdrawal", "atm", "pos ", "charges", "charge ",
+                                "gst", "interest debit", "bill pay", " dr ", " dr.",
+                                "debit ", "fee")
+                def _is_credit(c: dict) -> bool:
+                    if not isinstance(c, dict) or "amount" not in c:
+                        return False
+                    try:
+                        amt = float(str(c.get("amount", "0")).replace(",", ""))
+                    except ValueError:
+                        return False
+                    if amt <= 0:
+                        return False
+                    narration = str(c.get("narration", "")).lower()
+                    return not any(hint in narration for hint in _DEBIT_HINTS)
+                credits = [SalaryCredit(**c) for c in raw_credits if _is_credit(c)]
+                if not credits and raw_credits:
+                    logger.info("Bank statement: filtered out %d non-credit transactions (EMI/debit/charges)", len(raw_credits))
+            elif self.mock_mode and (salary_slip_amount or itr_amount):
+                # Mock-mode demo convenience: when no transaction-level extraction
+                # is available, fabricate a single credit matching the slip/ITR so
+                # the deterministic mock path produces a clean approval. Disabled
+                # in real mode so the pay-slip-vs-bank check can actually fire.
                 best_amount = salary_slip_amount or (itr_amount / 12)
                 credits = [
                     SalaryCredit(amount=best_amount, date="01/01/2026", narration="CREDIT")
@@ -205,6 +243,25 @@ class IncomeIntelligenceProcessor:
 
         if result.verified_monthly_income > 0 and result.verified_monthly_income < 20000:
             result.anomaly_flags.append(IncomeFlag.INCOME_BELOW_RBI_MINIMUM)
+
+        # Compare the applicant's typed declaration against what the documents
+        # actually show. Beyond 10% delta the application must be reviewed —
+        # the verified number from documents wins downstream, but the form
+        # mismatch is a strong signal of mis-statement or fraud.
+        if (
+            declared_monthly_income is not None
+            and declared_monthly_income > 0
+            and result.verified_monthly_income > 0
+        ):
+            delta = abs(declared_monthly_income - result.verified_monthly_income) / max(
+                declared_monthly_income, result.verified_monthly_income
+            )
+            if delta > 0.10:
+                result.anomaly_flags.append(IncomeFlag.INCOME_DECLARATION_MISMATCH)
+                if declared_monthly_income > result.verified_monthly_income:
+                    result.anomaly_flags.append(IncomeFlag.INCOME_INFLATION)
+                else:
+                    result.anomaly_flags.append(IncomeFlag.INCOME_DEFLATION)
 
         # ML Confidence Scoring
         result.income_confidence = self.xgboost.predict({

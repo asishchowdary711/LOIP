@@ -14,17 +14,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboard", tags=["Onboarding"])
 pipeline = OnboardingPipeline(mock_mode=True)
 
-# Best-effort MinIO document store. If MinIO is unreachable (e.g. Docker not
-# running), fall back to None — the pipeline then skips document persistence
-# and evidence chains simply omit document-backed source locations.
+# Document store: MinIO if reachable, otherwise a local filesystem fallback
+# that mirrors the same id format ("<bucket>/<uuid>.<ext>"). The fallback
+# keeps evidence chains populated (with resolvable document_ids) even when
+# MinIO isn't running, so traceability never silently degrades to empty.
 try:
-    from loip.storage import DocumentStore
+    from loip.storage import DocumentStore, LocalDocumentStore, open_document_store
 
-    document_store = DocumentStore()
-    logger.info("MinIO document store connected; uploaded documents will be persisted")
-except Exception as exc:  # noqa: BLE001 - degrade gracefully if MinIO is down
+    document_store = open_document_store()
+    if isinstance(document_store, LocalDocumentStore):
+        logger.info(
+            "MinIO unreachable; using local document store at %s — evidence chains stay populated",
+            document_store.root,
+        )
+    else:
+        logger.info("MinIO document store connected; uploaded documents will be persisted")
+except Exception as exc:  # noqa: BLE001 - last-resort guard
     document_store = None
-    logger.warning("MinIO document store unavailable (%s); documents will not be persisted", exc)
+    logger.warning("Document store unavailable (%s); documents will not be persisted", exc)
 
 # Set by the app lifespan (loip/web/api.py) once the Kafka producer + Neo4j
 # identity graph are started.

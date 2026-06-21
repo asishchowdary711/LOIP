@@ -146,19 +146,24 @@ DEMO_SCENARIOS: list[dict] = [
 
 
 def _document_store_and_bytes(images):
-    """Best-effort MinIO store + PNG-encoded mock-image bytes, so seeded demo
-    cases get document-backed evidence chains. Returns (store, raw_bytes) or
-    (None, None) if MinIO is unavailable."""
+    """Document store + PNG-encoded mock-image bytes so seeded demo cases get
+    document-backed evidence chains. Prefers MinIO and falls back to the local
+    filesystem store, so the chains are *always* populated."""
     try:
         import cv2
 
-        from loip.storage import DocumentStore
+        from loip.storage import LocalDocumentStore, open_document_store
 
-        store = DocumentStore()
+        store = open_document_store()
+        if isinstance(store, LocalDocumentStore):
+            logger.info(
+                "MinIO unreachable for demo seeding; using local document store at %s",
+                store.root,
+            )
         raw = [cv2.imencode(".png", img)[1].tobytes() for img in images]
         return store, raw
-    except Exception as exc:  # noqa: BLE001 - degrade gracefully if MinIO is down
-        logger.warning("MinIO unavailable for demo seeding (%s); evidence chains omit document ids", exc)
+    except Exception as exc:  # noqa: BLE001 - last-resort guard
+        logger.warning("Document store unavailable for demo seeding (%s); evidence chains omit document ids", exc)
         return None, None
 
 

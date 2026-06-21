@@ -49,11 +49,14 @@ class DocumentIntelligenceProcessor:
     def _classify_via_ollama(self, image: np.ndarray) -> ClassificationResult | None:
         """Ask Qwen2.5-VL via Ollama to classify the document type.
         Returns None if Ollama is unreachable or returns an unrecognised type."""
-        import cv2
-        ok, buf = cv2.imencode(".png", image)
-        if not ok:
+        import time
+        import urllib.error
+        from loip.models.qwen2_5_vl_wrapper import _OLLAMA_SEMAPHORE, _prepare_image
+
+        img_bytes, _ = _prepare_image(image)
+        if not img_bytes:
             return None
-        img_b64 = base64.b64encode(buf.tobytes()).decode()
+        img_b64 = base64.b64encode(img_bytes).decode()
 
         valid_types = ", ".join(_DOC_CLASS_NAMES.keys())
         prompt = (
@@ -66,18 +69,36 @@ class DocumentIntelligenceProcessor:
             "prompt": prompt,
             "images": [img_b64],
             "stream": False,
-            "options": {"temperature": 0},
+            "keep_alive": "10m",
+            "options": {"temperature": 0, "num_ctx": 1024, "num_predict": 32},
         }
-        req = urllib.request.Request(
-            f"{OLLAMA_HOST}/api/generate",
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                body = json.loads(resp.read())
-        except (OSError, ValueError) as exc:
-            logger.warning("Ollama classification request failed: %s", exc)
+        body = None
+        backoff = 1.0
+        with _OLLAMA_SEMAPHORE:
+            for attempt in range(3):
+                req = urllib.request.Request(
+                    f"{OLLAMA_HOST}/api/generate",
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        body = json.loads(resp.read())
+                    break
+                except urllib.error.HTTPError as exc:
+                    if 500 <= exc.code < 600 and attempt < 2:
+                        logger.warning("Ollama classify HTTP %d (attempt %d/3) — retrying in %.1fs",
+                                       exc.code, attempt + 1, backoff)
+                        time.sleep(backoff)
+                        backoff *= 2
+                        continue
+                    logger.warning("Ollama classification request failed: %s", exc)
+                    return None
+                except (OSError, ValueError) as exc:
+                    logger.warning("Ollama classification request failed: %s", exc)
+                    return None
+
+        if body is None:
             return None
 
         raw = body.get("response", "").strip().lower().replace(" ", "_")

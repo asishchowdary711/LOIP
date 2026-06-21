@@ -21,6 +21,7 @@ class IncomeFlag(StrEnum):
     NO_SALARY_CREDIT_FOUND = "no_salary_credit_found"
     INCOME_INFLATION = "income_inflation"
     INCOME_DEFLATION = "income_deflation"
+    INCOME_DECLARATION_MISMATCH = "income_declaration_mismatch"
 
 
 class SalaryCredit(BaseModel):

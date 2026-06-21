@@ -32,7 +32,18 @@ class LayoutLMv3Wrapper:
             try:
                 from transformers import LayoutLMv3ForSequenceClassification, LayoutLMv3Processor
 
-                if CHECKPOINT_DIR.exists():
+                # Use the local fine-tuned checkpoint only when it has real
+                # weights — a stub safetensors (< 1 MB) means no weights have
+                # been downloaded yet and we should fall back to HuggingFace
+                # so the wrapper still works on fresh clones. The real
+                # weights are too large to live in git and are .gitignored.
+                local_weights = CHECKPOINT_DIR / "model.safetensors"
+                use_local = (
+                    CHECKPOINT_DIR.exists()
+                    and local_weights.exists()
+                    and local_weights.stat().st_size > 1_000_000
+                )
+                if use_local:
                     checkpoint = str(CHECKPOINT_DIR)
                     self.model = LayoutLMv3ForSequenceClassification.from_pretrained(checkpoint)
                 else:
@@ -40,7 +51,10 @@ class LayoutLMv3Wrapper:
                     self.model = LayoutLMv3ForSequenceClassification.from_pretrained(
                         checkpoint, num_labels=len(DOC_CLASS_LABELS)
                     )
-                self.processor = LayoutLMv3Processor.from_pretrained(checkpoint, apply_ocr=False)
+                # Processor config can stay on the local dir even when the
+                # weights came from HF — it carries the same vocab/tokenizer.
+                processor_src = str(CHECKPOINT_DIR) if CHECKPOINT_DIR.exists() else BASE_MODEL
+                self.processor = LayoutLMv3Processor.from_pretrained(processor_src, apply_ocr=False)
                 self.model.eval()
             except ImportError:
                 self.mock_mode = True

@@ -80,7 +80,7 @@ FIELD_SPECS: dict[DocumentClass, list[str]] = {
     ],
     DocumentClass.BANK_STATEMENT: [
         "bank_name", "account_number", "account_holder_name", "period",
-        "opening_balance", "closing_balance",
+        "opening_balance", "closing_balance", "salary_credits",
     ],
     DocumentClass.FORM16: [
         "employer_tan", "employee_pan", "assessment_year",

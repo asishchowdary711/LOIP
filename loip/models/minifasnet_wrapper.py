@@ -40,12 +40,15 @@ class MiniFASNetWrapper:
 
         face = faces[0]
 
-        # Large yaw/pitch suggests a photo-of-photo attack
+        # Large yaw/pitch suggests a photo-of-photo attack. The live-challenge
+        # in the UI (turn left, turn right, blink) is what really proves
+        # liveness; this static-frame check is a sanity gate, so we keep the
+        # bounds reasonable rather than punitive.
         yaw, pitch = 0.0, 0.0
         if hasattr(face, "pose") and face.pose is not None:
             yaw = abs(float(face.pose[1]))
             pitch = abs(float(face.pose[0]))
-        pose_ok = yaw < 30 and pitch < 20
+        pose_ok = yaw < 45 and pitch < 30
 
         # Eye-aspect-ratio — eyes must be open
         ear = 0.3
@@ -61,5 +64,8 @@ class MiniFASNetWrapper:
 
         eyes_open = ear > 0.15
         det_score = float(face.det_score) if hasattr(face, "det_score") else 0.5
-        score = det_score * (0.8 if pose_ok else 0.4) * (1.0 if eyes_open else 0.5)
+        # Less punitive multipliers — a real face is detected at det_score
+        # ~0.7+, so we want the typical case to clear the 0.50 threshold
+        # comfortably while still penalising clear no-face / closed-eye cases.
+        score = det_score * (1.0 if pose_ok else 0.6) * (1.0 if eyes_open else 0.6)
         return float(np.clip(score, 0.0, 1.0))

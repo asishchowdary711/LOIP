@@ -2,12 +2,21 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 
 import numpy as np
 
 from loip.domains.document_intel.schemas import FIELD_SPECS, DocumentClass, ExtractionField, ExtractionResult
 
 logger = logging.getLogger(__name__)
+
+# Ollama on a single laptop GPU can only serve one VL request at a time
+# without queuing 500s. We still process documents in parallel, but gate the
+# expensive Qwen call behind this semaphore so at most N requests are in
+# flight at once. Override via LOIP_OLLAMA_MAX_CONCURRENCY.
+_OLLAMA_MAX_CONCURRENCY = int(os.getenv("LOIP_OLLAMA_MAX_CONCURRENCY", "2"))
+_OLLAMA_SEMAPHORE = threading.Semaphore(_OLLAMA_MAX_CONCURRENCY)
 
 # Default model — configurable via constructor for smaller/larger variants
 # (e.g. "Qwen/Qwen2.5-VL-7B-Instruct").
@@ -25,6 +34,36 @@ FULL_MATCH_CONFIDENCE = 0.90
 # Confidence when JSON parses but is missing some expected fields.
 PARTIAL_MATCH_CONFIDENCE = 0.70
 
+# Cap for the longest edge of the image we send to the VL model. Qwen2.5-VL's
+# default training recipe uses ~1280-px longest edge; uploading higher-res
+# images just multiplies the vision-token count without improving extraction
+# accuracy on typical document layouts.
+MAX_IMAGE_EDGE = 1280
+# JPEG quality for the transmitted image. 85 is visually lossless for OCR.
+JPEG_QUALITY = 85
+
+
+def _prepare_image(image: np.ndarray) -> tuple[bytes, str]:
+    """Downscale (preserving aspect) and JPEG-encode an image for VL inference.
+
+    Returns (encoded_bytes, mime_subtype). Falls back to PNG only if JPEG
+    encoding fails (e.g. odd channel counts) — keeps the call site simple.
+    """
+    import cv2
+
+    h, w = image.shape[:2]
+    longest = max(h, w)
+    if longest > MAX_IMAGE_EDGE:
+        scale = MAX_IMAGE_EDGE / longest
+        new_size = (int(w * scale), int(h * scale))
+        image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+
+    ok, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+    if ok:
+        return buf.tobytes(), "jpeg"
+    ok, buf = cv2.imencode(".png", image)
+    return (buf.tobytes() if ok else b""), "png"
+
 _DOC_HINTS: dict[str, str] = {
     "aadhaar": (
         "This is an Indian Aadhaar card. The aadhaar_number is the large "
@@ -40,6 +79,20 @@ _DOC_HINTS: dict[str, str] = {
     "salary_slip": (
         "This is an Indian salary/pay slip. Look for net_pay (take-home), "
         "gross_pay (total earnings), basic_pay, HRA, PF deduction, and TDS."
+    ),
+    "bank_statement": (
+        "This is an Indian bank account statement with a transaction table. "
+        "Return salary_credits as a JSON array of objects, but ONLY for "
+        "CREDIT-direction transactions where money came INTO the account. "
+        "STRICTLY EXCLUDE: any DEBIT/withdrawal (DR), any transaction whose "
+        "narration mentions EMI, loan repayment, transfer out, ATM/POS, bill "
+        "pay, charges, GST, or interest debit. The credit column / 'CR' / 'Cr' "
+        "marker / a positive change in balance after the row is your signal. "
+        "Each object MUST have keys: amount (number, positive), date (string, "
+        "DD/MM/YYYY or as printed), narration (string, the transaction "
+        "description). Prefer transactions whose narration contains SAL/"
+        "SALARY/NEFT-CR/IMPS-CR/CREDIT/CR FROM <EMPLOYER>. If no qualifying "
+        "credits are visible, return an empty array. Do not invent rows."
     ),
 }
 
@@ -110,11 +163,18 @@ class Qwen25VLWrapper:
 
         found_all = all(name in parsed for name in field_names)
         confidence = FULL_MATCH_CONFIDENCE if found_all else PARTIAL_MATCH_CONFIDENCE
-        fields = [
-            ExtractionField(name=name, value=str(parsed[name]), confidence=confidence)
-            for name in field_names
-            if parsed.get(name)
-        ]
+        fields = []
+        for name in field_names:
+            value = parsed.get(name)
+            if not value:
+                continue
+            # Preserve list/dict structures as JSON so downstream consumers
+            # (e.g. bank_statement.salary_credits) can deserialize them.
+            if isinstance(value, (list, dict)):
+                serialized = json.dumps(value)
+            else:
+                serialized = str(value)
+            fields.append(ExtractionField(name=name, value=serialized, confidence=confidence))
         overall_confidence = confidence if fields else 0.0
         return ExtractionResult(
             document_class=doc_class, fields=fields, model="qwen2.5-vl", overall_confidence=overall_confidence
@@ -122,15 +182,14 @@ class Qwen25VLWrapper:
 
     def _extract_ollama(self, image: np.ndarray, doc_class: DocumentClass) -> ExtractionResult:
         import base64
+        import urllib.error
         import urllib.request
 
-        import cv2
-
         field_names = FIELD_SPECS.get(doc_class, [])
-        ok, buf = cv2.imencode(".png", image)
-        if not ok:
+        img_bytes, _ = _prepare_image(image)
+        if not img_bytes:
             return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
-        img_b64 = base64.b64encode(buf.tobytes()).decode()
+        img_b64 = base64.b64encode(img_bytes).decode()
 
         hint = _DOC_HINTS.get(doc_class.value, "")
         hint_line = f" {hint}" if hint else ""
@@ -146,18 +205,39 @@ class Qwen25VLWrapper:
             "prompt": prompt,
             "images": [img_b64],
             "stream": False,
-            "options": {"temperature": 0, "num_ctx": 8192},
+            "keep_alive": "10m",
+            "options": {"temperature": 0, "num_ctx": 2048, "num_predict": 512},
         }
-        req = urllib.request.Request(
-            f"{self.ollama_host}/api/generate",
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=300) as resp:
-                body = json.loads(resp.read())
-        except (OSError, ValueError) as exc:
-            logger.warning("Qwen2.5-VL Ollama request failed: %s", exc)
+        # Bound concurrency to what Ollama can actually serve — exceeding it
+        # produces HTTP 500s. Retry transient 5xx with exponential backoff
+        # because the first 500 is sometimes a queue-full race.
+        body = None
+        backoff = 1.0
+        with _OLLAMA_SEMAPHORE:
+            for attempt in range(3):
+                req = urllib.request.Request(
+                    f"{self.ollama_host}/api/generate",
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=300) as resp:
+                        body = json.loads(resp.read())
+                    break
+                except urllib.error.HTTPError as exc:
+                    if 500 <= exc.code < 600 and attempt < 2:
+                        logger.warning("Qwen2.5-VL Ollama HTTP %d (attempt %d/3) for %s — retrying in %.1fs",
+                                       exc.code, attempt + 1, doc_class.value, backoff)
+                        time.sleep(backoff)
+                        backoff *= 2
+                        continue
+                    logger.warning("Qwen2.5-VL Ollama request failed: %s", exc)
+                    return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
+                except (OSError, ValueError) as exc:
+                    logger.warning("Qwen2.5-VL Ollama request failed: %s", exc)
+                    return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
+
+        if body is None:
             return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
 
         raw_response = body.get("response", "")
@@ -202,10 +282,18 @@ class Qwen25VLWrapper:
         if self.backend == "ollama":
             return self._extract_ollama(image, doc_class)
 
+        import cv2
         import torch
         from PIL import Image as PILImage
 
         field_names = FIELD_SPECS.get(doc_class, [])
+        # Downscale to the same budget as the Ollama path so HF inference
+        # produces fewer vision tokens and runs faster on CPU.
+        h, w = image.shape[:2]
+        longest = max(h, w)
+        if longest > MAX_IMAGE_EDGE:
+            scale = MAX_IMAGE_EDGE / longest
+            image = cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
         pil_image = PILImage.fromarray(image).convert("RGB")
 
         hint = _DOC_HINTS.get(doc_class.value, "")

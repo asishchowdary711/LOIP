@@ -34,16 +34,24 @@ class FraudIntelligenceProcessor:
         result = FraudResult(application_id=application_id, fraud_score=0.0)
 
         # 1. Document Forgery Hard Rules
-        # E.g. Check for tampered metadata, known spoof cases
-        if identity_result.get("liveness_score") is not None and identity_result.get("liveness_verified") is False:
+        # E.g. Check for tampered metadata, known spoof cases.
+        #
+        # Failed liveness on a still selfie frame is a SOFT signal — the live
+        # webcam challenge (turn-left/turn-right/blink) is the real liveness
+        # gate. A hard 0.9 severity here would auto-reject every borderline
+        # static frame even after a successful live challenge, so we route
+        # this to a review-level severity (0.55) instead.
+        liveness_score = identity_result.get("liveness_score")
+        if liveness_score is not None and identity_result.get("liveness_verified") is False:
+            severity = 0.55 if liveness_score >= 0.25 else 0.9
             result.signals.append(FraudSignal(
                 signal_type=FraudSignalType.DOCUMENT_FORGERY,
-                severity=0.9,
-                description="Liveness detection failed, possible spoof",
+                severity=severity,
+                description=f"Liveness check below threshold (score={liveness_score:.2f})",
                 evidence=EvidenceChain(
                     claim="liveness_score < threshold",
                     supporting=[],
-                    reconciled_value="spoof",
+                    reconciled_value="possible_spoof" if severity < 0.8 else "spoof",
                     reconciliation_method=ReconciliationMethod.HIGHEST_CONFIDENCE,
                     confidence=0.98
                 )
