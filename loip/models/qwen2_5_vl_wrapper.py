@@ -25,6 +25,24 @@ FULL_MATCH_CONFIDENCE = 0.90
 # Confidence when JSON parses but is missing some expected fields.
 PARTIAL_MATCH_CONFIDENCE = 0.70
 
+_DOC_HINTS: dict[str, str] = {
+    "aadhaar": (
+        "This is an Indian Aadhaar card. The aadhaar_number is the large "
+        "12-digit number (possibly formatted as XXXX XXXX XXXX) printed "
+        "prominently on the card. It may also appear as a masked number "
+        "with only the last 4 digits visible — if so, return the visible digits. "
+        "The address is usually printed below the name."
+    ),
+    "pan": (
+        "This is an Indian PAN card. The pan_number is a 10-character "
+        "alphanumeric code (e.g. ABCDE1234F) printed on the card."
+    ),
+    "salary_slip": (
+        "This is an Indian salary/pay slip. Look for net_pay (take-home), "
+        "gross_pay (total earnings), basic_pay, HRA, PF deduction, and TDS."
+    ),
+}
+
 
 class Qwen25VLWrapper:
     def __init__(self, mock_mode: bool = True, model_name: str = DEFAULT_MODEL):
@@ -114,10 +132,13 @@ class Qwen25VLWrapper:
             return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
         img_b64 = base64.b64encode(buf.tobytes()).decode()
 
+        hint = _DOC_HINTS.get(doc_class.value, "")
+        hint_line = f" {hint}" if hint else ""
         prompt = (
             "Extract the following fields from this document image and return "
             "ONLY a JSON object with these exact keys: "
-            f"{', '.join(field_names)}. "
+            f"{', '.join(field_names)}."
+            f"{hint_line} "
             "If a field is not visible or not present, use an empty string as its value."
         )
         payload = {
@@ -125,11 +146,6 @@ class Qwen25VLWrapper:
             "prompt": prompt,
             "images": [img_b64],
             "stream": False,
-            # A full-page document image consumes most of the default 4096-token
-            # context; combined with a many-field prompt (e.g. the 12-field
-            # salary slip) the request overflows and Ollama returns HTTP 400
-            # (exceed_context_size_error). Raise the window so multi-field docs
-            # extract cleanly.
             "options": {"temperature": 0, "num_ctx": 8192},
         }
         req = urllib.request.Request(
@@ -144,7 +160,9 @@ class Qwen25VLWrapper:
             logger.warning("Qwen2.5-VL Ollama request failed: %s", exc)
             return ExtractionResult(document_class=doc_class, fields=[], model="qwen2.5-vl", overall_confidence=0.0)
 
-        return self._build_result(self._parse_json(body.get("response", "")), doc_class)
+        raw_response = body.get("response", "")
+        logger.info("Qwen2.5-VL Ollama raw response for %s: %s", doc_class.value, raw_response[:500])
+        return self._build_result(self._parse_json(raw_response), doc_class)
 
     def extract_fields(self, image: np.ndarray, doc_class: DocumentClass) -> ExtractionResult:
         if self.mock_mode:
@@ -190,10 +208,13 @@ class Qwen25VLWrapper:
         field_names = FIELD_SPECS.get(doc_class, [])
         pil_image = PILImage.fromarray(image).convert("RGB")
 
+        hint = _DOC_HINTS.get(doc_class.value, "")
+        hint_line = f" {hint}" if hint else ""
         prompt = (
             "Extract the following fields from this document image and return "
             "ONLY a JSON object with these exact keys: "
-            f"{', '.join(field_names)}. "
+            f"{', '.join(field_names)}."
+            f"{hint_line} "
             "If a field is not visible or not present, use an empty string as its value."
         )
         messages = [

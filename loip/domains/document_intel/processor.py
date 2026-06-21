@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import re
 import urllib.request
 
 import numpy as np
@@ -158,6 +159,36 @@ class DocumentIntelligenceProcessor:
         secondary_result = self.secondary_extractor.extract_structured(image, doc_class)
         return primary_result if primary_result.overall_confidence > secondary_result.overall_confidence else secondary_result
 
+    @staticmethod
+    def _patch_aadhaar_from_ocr(extraction: "ExtractionResult", ocr) -> "ExtractionResult":
+        """If the VL model missed aadhaar_number, try to find a 12-digit
+        sequence in the raw OCR text (PaddleOCR/Surya always reads the number
+        even when the VL model doesn't label it)."""
+        from .schemas import ExtractionField
+
+        has_aadhaar = any(f.name == "aadhaar_number" and f.value for f in extraction.fields)
+        if has_aadhaar:
+            return extraction
+
+        raw_text = ""
+        if ocr is not None:
+            raw_text = getattr(ocr, "raw_text", "") or ""
+            if not raw_text:
+                for attr in ("primary", "secondary"):
+                    sub = getattr(ocr, attr, None)
+                    if sub is not None:
+                        raw_text += " " + (getattr(sub, "raw_text", "") or "")
+
+        digits_only = re.sub(r"\D", "", raw_text)
+        match = re.search(r"\d{12}", digits_only)
+        if match:
+            aadhaar_num = match.group()
+            logger.info("Patched aadhaar_number from OCR text: %s", aadhaar_num)
+            extraction.fields.append(
+                ExtractionField(name="aadhaar_number", value=aadhaar_num, confidence=0.75)
+            )
+        return extraction
+
     def process(self, image: np.ndarray) -> dict:
         """End-to-end document processing pipeline."""
         import hashlib
@@ -176,6 +207,10 @@ class DocumentIntelligenceProcessor:
         classification = self.classify_document(image)
         ocr = self.perform_ocr(image)
         extraction = self.extract_fields(image, classification.document_class)
+
+        if classification.document_class == DocumentClass.AADHAAR:
+            extraction = self._patch_aadhaar_from_ocr(extraction, ocr)
+
         qr = self._detect_qr(image, classification.document_class)
 
         result = {
