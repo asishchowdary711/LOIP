@@ -289,6 +289,19 @@
   .liveness .result-badge.fail{color:var(--bad)}
   
   @media(max-width:720px){.g2,.g3,.uploads,.chips{grid-template-columns:1fr}}
+
+  /* Eligibility hint (inline, below loan_amount) */
+  .elig-hint{
+    font-size:.82rem;color:var(--muted);margin-top:6px;line-height:1.4;
+    display:none;font-weight:500;
+  }
+  .elig-hint.show{display:block;animation:fadeIn 0.3s ease-out}
+  .elig-hint strong{color:var(--accent-2);font-weight:700}
+  .elig-hint a{
+    color:var(--accent-2);font-weight:700;text-decoration:none;
+    border-bottom:1px dashed currentColor;cursor:pointer;margin-left:6px;
+  }
+  .elig-hint a:hover{color:var(--text-heading)}
 </style>
 </head>
 <body>
@@ -390,6 +403,45 @@
 </div>
 
 <script>
+/* ---------- inline eligibility hint (driven by monthly_income field) ---------- */
+(function(){
+  const incomeField = document.querySelector('[name="monthly_income"]');
+  const amountField = document.querySelector('[name="loan_amount"]');
+  if (!incomeField || !amountField) return;
+
+  const hint = document.createElement('div');
+  hint.className = 'elig-hint';
+  amountField.parentElement.appendChild(hint);
+
+  function fmtInr(n) { return '₹' + n.toLocaleString('en-IN'); }
+
+  async function checkEligibility() {
+    const salary = parseInt(incomeField.value);
+    if (!salary || salary < 10000) { hint.classList.remove('show'); return; }
+    try {
+      const resp = await fetch('/apply/eligibility?salary=' + salary);
+      if (!resp.ok) { console.warn('[eligibility]', resp.status, await resp.text()); hint.classList.remove('show'); return; }
+      const data = await resp.json();
+      if (typeof data.max_principal !== 'number') { console.warn('[eligibility] unexpected response', data); hint.classList.remove('show'); return; }
+      hint.innerHTML = '✓ Eligible for up to <strong>' + fmtInr(data.max_principal) +
+        '</strong> based on your income. <a data-elig-fill>Use this amount</a>';
+      hint.classList.add('show');
+      hint.querySelector('[data-elig-fill]').addEventListener('click', function(e) {
+        e.preventDefault();
+        amountField.value = data.max_principal;
+        amountField.dispatchEvent(new Event('input', {bubbles: true}));
+      });
+    } catch (e) { console.warn('[eligibility] fetch failed', e); hint.classList.remove('show'); }
+  }
+
+  let debounceTimer;
+  incomeField.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(checkEligibility, 400);
+  });
+  incomeField.addEventListener('blur', checkEligibility);
+})();
+
 /* ---------- document slots ---------- */
 const SLOTS=[
   {key:'aadhaar',title:'Aadhaar card',sub:'Front side'},

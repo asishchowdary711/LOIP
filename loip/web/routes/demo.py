@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from loip.schemas.decision import Decision, LoanApplication
+from loip.services.eligibility import calculate_eligibility
 from loip.web.auth import limiter
 from loip.web.routes import onboard as onboard_routes
 from loip.web.routes import review as review_routes
@@ -588,3 +589,12 @@ async def submit_application(
             "status_url": f"/apply/status/{application_id}",
         }
     )
+
+
+@router.get("/eligibility")
+async def loan_eligibility(salary: int):
+    try:
+        result = calculate_eligibility(salary)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return JSONResponse(result)
