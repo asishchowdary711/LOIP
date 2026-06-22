@@ -1,124 +1,215 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — LOIP{% endblock %}
+{% block title %}Dashboard — LOIP Review Console{% endblock %}
+
+{# Gauge ring SVG — mirrors the React prototype's gauge() helper. value is 0..100. #}
+{% macro gauge(value, size=176, stroke=14) -%}
+  {% set v = value if value is not none else 0 %}
+  {% set r = (size - stroke) / 2.0 %}
+  {% set circ = 6.2831853 * r %}
+  {% set frac = (v / 100.0) %}
+  {% if frac < 0 %}{% set frac = 0 %}{% endif %}
+  {% if frac > 1 %}{% set frac = 1 %}{% endif %}
+  {% set offset = circ * (1 - frac) %}
+  {% if v <= 35 %}{% set band = 'var(--approve)' %}
+  {% elif v <= 65 %}{% set band = 'var(--review)' %}
+  {% else %}{% set band = 'var(--reject)' %}{% endif %}
+  <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 {{ size }} {{ size }}" style="transform:rotate(-90deg)">
+    <circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="{{ stroke }}"/>
+    <circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="{{ band }}" stroke-width="{{ stroke }}"
+            stroke-linecap="round" stroke-dasharray="{{ circ }}" stroke-dashoffset="{{ offset }}"
+            style="filter:drop-shadow(0 0 4px {{ band }})"/>
+  </svg>
+{%- endmacro %}
+
+{% macro band_label(v) -%}
+  {%- if v <= 35 -%}Low risk{%- elif v <= 65 -%}Medium risk{%- else -%}High risk{%- endif -%}
+{%- endmacro %}
+
+{% macro band_color(v) -%}
+  {%- if v <= 35 -%}var(--approve){%- elif v <= 65 -%}var(--review){%- else -%}var(--reject){%- endif -%}
+{%- endmacro %}
+
+{# Applicant avatar + name cell. No city in ReviewCase — show system decision pill caption. #}
+{% macro applicant_cell(case) -%}
+  {% set initials = case.applicant_name.split()|map('first')|list %}
+  {% set ini = (initials[0] if initials else '?') ~ (initials[1] if initials|length > 1 else '') %}
+  <div class="applicant">
+    <div class="ava" style="background:linear-gradient(135deg, var(--accent), oklch(0.72 0.16 320));">{{ ini|upper }}</div>
+    <div>
+      <div class="nm">{{ case.applicant_name }}</div>
+      <div class="meta">{{ case.application_id }}</div>
+    </div>
+  </div>
+{%- endmacro %}
+
+{% macro decision_pill(d) -%}
+  <span class="pill {{ d }}"><span class="d"></span>{{ d }}</span>
+{%- endmacro %}
 
 {% block content %}
-<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
-    <div>
-        <h2 style="margin-bottom: 0.25rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em;">Loan Onboarding Intelligence Platform</h2>
-        <p style="color: var(--muted); font-size: 0.875rem;">
-            Personal Loans &middot; India &middot; annotation_sample25 (20 test personas &middot; mock-mode)
-        </p>
+<section id="screen-dashboard" class="screen active">
+  <div class="page-head">
+    <div class="crumbs">
+      <span class="pill" style="background:transparent;color:var(--fg-muted);font-family:var(--mono);font-size:11px;letter-spacing:.08em">Personal Loans</span>
+      <span>·</span>
+      <span class="pill" style="background:transparent;color:var(--fg-muted);font-family:var(--mono);font-size:11px;letter-spacing:.08em">India</span>
+      <span>·</span>
+      <span>live · review_processor</span>
     </div>
-</div>
+    <h1>Loan Onboarding Intelligence</h1>
+    <p>Portfolio risk and decisioning across {{ stats.total }} application{{ '' if stats.total == 1 else 's' }} currently in the system.</p>
+  </div>
 
-<div class="grid-3" style="margin-bottom: 1.5rem;">
-    <div class="card stat-card" style="--accent-color: var(--primary);">
-        <div class="label">Total Applications</div>
-        <div class="value">{{ stats.total }}</div>
-    </div>
-    <div class="card stat-card" style="--accent-color: var(--success);">
-        <div class="label">Approved</div>
-        <div class="value" style="color: var(--success);">{{ stats.approve }}</div>
-    </div>
-    <div class="card stat-card" style="--accent-color: var(--warning);">
-        <div class="label">In Review</div>
-        <div class="value" style="color: var(--warning);">{{ stats.review }}</div>
-    </div>
-</div>
+  {% set auto = stats.approve + stats.reject %}
+  {% set auto_pct = (auto * 100 // stats.total) if stats.total else 0 %}
+  {% set pct_approve = (stats.approve * 100 // stats.total) if stats.total else 0 %}
+  {% set pct_review  = (stats.review  * 100 // stats.total) if stats.total else 0 %}
+  {% set pct_reject  = (stats.reject  * 100 // stats.total) if stats.total else 0 %}
+  {% set avg_score_int = (stats.avg_risk * 100)|round|int %}
+  {% set avg_foir_int  = (stats.avg_foir * 100)|round|int %}
+  {% set avg_cibil_int = stats.avg_cibil|round|int %}
 
-<div class="grid-3" style="margin-bottom: 2rem;">
-    <div class="card stat-card" style="--accent-color: var(--danger);">
-        <div class="label">Rejected</div>
-        <div class="value" style="color: var(--danger);">{{ stats.reject }}</div>
-    </div>
-    <div class="card stat-card" style="--accent-color: var(--info);">
-        <div class="label">Avg FOIR</div>
-        <div class="value" style="color: var(--info);">{{ "%.0f"|format(stats.avg_foir * 100) }}%</div>
-    </div>
-    <div class="card stat-card" style="--accent-color: var(--primary);">
-        <div class="label">Avg CIBIL</div>
-        <div class="value">{{ "%.0f"|format(stats.avg_cibil) }}</div>
-    </div>
-</div>
-
-<div class="card">
-    <div style="margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
-        <h2 style="margin-bottom: 0;">Recent Applications</h2>
-        <div style="width: 320px; position: relative;">
-            <input type="search" id="searchInput" placeholder="Search applicant, ID, decision..." style="padding-left: 2.25rem;">
-            <span style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 0.85rem;">🔍</span>
+  <div class="hero-grid">
+    <div class="card card-pad">
+      <div class="card-head">
+        <span class="card-title">Decision distribution</span>
+        <span class="card-title" style="letter-spacing:.04em;text-transform:none">Auto-decisioned {{ auto_pct }}%</span>
+      </div>
+      <div class="dist-total"><span class="n tnum">{{ stats.total }}</span><span class="t">applications scored</span></div>
+      <div class="dist-bar">
+        <span style="flex-grow:{{ stats.approve }};background:var(--approve)"></span>
+        <span style="flex-grow:{{ stats.review  }};background:var(--review)"></span>
+        <span style="flex-grow:{{ stats.reject  }};background:var(--reject)"></span>
+      </div>
+      <div class="dist-legend">
+        <div class="item">
+          <div class="k"><span class="sw" style="background:var(--approve)"></span>Approve</div>
+          <div class="v tnum">{{ stats.approve }}<small>{{ pct_approve }}%</small></div>
         </div>
+        <div class="item">
+          <div class="k"><span class="sw" style="background:var(--review)"></span>Review</div>
+          <div class="v tnum">{{ stats.review }}<small>{{ pct_review }}%</small></div>
+        </div>
+        <div class="item">
+          <div class="k"><span class="sw" style="background:var(--reject)"></span>Reject</div>
+          <div class="v tnum">{{ stats.reject }}<small>{{ pct_reject }}%</small></div>
+        </div>
+      </div>
     </div>
-    
-    <div style="overflow-x: auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>Application</th>
-                    <th>Applicant</th>
-                    <th>Loan Amount</th>
-                    <th>Decision</th>
-                    <th>FOIR</th>
-                    <th>CIBIL</th>
-                    <th>Risk Score</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for case in cases %}
-                <tr>
-                    <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--muted);">{{ case.application_id }}</td>
-                    <td style="font-weight: 600; color: var(--text-heading);">{{ case.applicant_name }}</td>
-                    <td style="font-weight: 500;">&#8377;{{ case.loan_amount | inr }}</td>
-                    <td>
-                        <span class="badge badge-{{ case.system_decision.value }}">
-                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:currentColor; margin-right:1px;"></span>
-                            {{ case.system_decision.value|upper }}
-                        </span>
-                    </td>
-                    <td>{% if case.foir is not none %}{{ "%.0f"|format(case.foir * 100) }}%{% else %}-{% endif %}</td>
-                    <td style="font-family: 'JetBrains Mono', monospace;">{{ case.cibil_score or '-' }}</td>
-                    <td>
-                        {% if case.risk_score is not none %}
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">{{ "%.2f"|format(case.risk_score) }}</span>
-                            <div style="width: 50px; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
-                                <div style="height: 100%; width: {{ case.risk_score * 100 }}%; background: {% if case.risk_score >= 0.7 %}var(--danger){% elif case.risk_score >= 0.35 %}var(--warning){% else %}var(--success){% endif %};"></div>
-                            </div>
-                        </div>
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
-                    <td style="text-align: right;">
-                        <a href="/ui/review/{{ case.case_id }}" class="btn btn-outline" style="padding: 0.35rem 0.85rem; font-size: 0.8rem;">Review</a>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="8" style="text-align: center; color: var(--muted); padding: 3rem;">
-                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📂</div>
-                        No applications yet
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+
+    <div class="card card-pad gauge-card">
+      <span class="card-title" style="align-self:flex-start">Average risk score</span>
+      <div class="gauge-center" style="margin:14px 0 4px">
+        {{ gauge(avg_score_int, 176, 14) }}
+        <div class="gnum"><b class="tnum">{{ avg_score_int }}</b><span>/ 100</span></div>
+      </div>
+      <div class="band" style="color:{{ band_color(avg_score_int) }}">{{ band_label(avg_score_int) }}</div>
+      <div class="sub">{{ stats.approve }} of {{ stats.total }} clear automated policy checks.</div>
     </div>
-</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--approve);box-shadow:0 0 8px var(--approve)"></span>Approved</div>
+      <div class="value tnum">{{ stats.approve }}</div>
+      <div class="delta">cleared straight-through</div>
+    </div>
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--review);box-shadow:0 0 8px var(--review)"></span>In review</div>
+      <div class="value tnum">{{ stats.review }}</div>
+      <div class="delta">awaiting underwriter</div>
+    </div>
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--reject);box-shadow:0 0 8px var(--reject)"></span>Rejected</div>
+      <div class="value tnum">{{ stats.reject }}</div>
+      <div class="delta">policy / fraud fails</div>
+    </div>
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--accent)"></span>Avg FOIR</div>
+      <div class="value tnum">{{ avg_foir_int }}%</div>
+      <div class="delta">ceiling 45%</div>
+    </div>
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--accent)"></span>Avg CIBIL</div>
+      <div class="value tnum">{{ avg_cibil_int }}</div>
+      <div class="delta">across batch</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <span class="title">Recent applications</span>
+    <div class="chips" id="dash-chips">
+      <span class="chip active" data-f="all">All <span class="ct">{{ stats.total }}</span></span>
+      <span class="chip" data-f="approve">Approve <span class="ct">{{ stats.approve }}</span></span>
+      <span class="chip" data-f="review">Review <span class="ct">{{ stats.review }}</span></span>
+      <span class="chip" data-f="reject">Reject <span class="ct">{{ stats.reject }}</span></span>
+    </div>
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <input id="dash-search" placeholder="Search applicant, ID…" />
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Application</th><th>Applicant</th><th>Loan amount</th><th>Decision</th>
+          <th>FOIR</th><th>CIBIL</th><th>Risk score</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="dash-rows">
+        {% for case in cases %}
+          {% set risk_int = (case.risk_score * 100)|round|int if case.risk_score is not none else 0 %}
+          {% set foir_int = (case.foir * 100)|round|int if case.foir is not none else 0 %}
+          <tr data-id="{{ case.application_id }}"
+              data-decision="{{ case.system_decision.value }}"
+              data-search="{{ (case.applicant_name ~ ' ' ~ case.application_id)|lower }}">
+            <td><span class="appid">{{ case.application_id }}</span></td>
+            <td>{{ applicant_cell(case) }}</td>
+            <td><span class="amount tnum">₹{{ case.loan_amount|inr }}</span></td>
+            <td>{{ decision_pill(case.system_decision.value) }}</td>
+            <td class="num">{{ foir_int }}%</td>
+            <td class="num">{{ case.cibil_score if case.cibil_score is not none else '—' }}</td>
+            <td>
+              <div class="risk-cell">
+                {{ gauge(risk_int, 34, 3.5) }}
+                <span class="rv" style="color:{{ band_color(risk_int) }}">{{ risk_int }}</span>
+              </div>
+            </td>
+            <td style="text-align:right">
+              <a class="btn" href="/ui/review/{{ case.case_id }}">Review</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8"><div class="empty">No applications yet — submit one at <a href="/apply" style="color:var(--accent-2)">/apply</a> to populate the queue.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 
 <script>
-    document.getElementById('searchInput').addEventListener('input', function(e) {
-        const query = e.target.value.toLowerCase();
-        const rows = document.querySelectorAll('tbody tr');
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            if (text.includes(query)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
+(function () {
+  // Client-side filter chips + search. Mirrors the prototype's behaviour but
+  // operates on the already server-rendered rows.
+  const state = { f: 'all', q: '' };
+  const rows  = Array.from(document.querySelectorAll('#dash-rows tr[data-id]'));
+  const apply = () => {
+    rows.forEach(r => {
+      const okF = state.f === 'all' || r.dataset.decision === state.f;
+      const okQ = !state.q || r.dataset.search.includes(state.q);
+      r.style.display = (okF && okQ) ? '' : 'none';
     });
+  };
+  document.getElementById('dash-chips').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    document.querySelectorAll('#dash-chips .chip').forEach(x => x.classList.toggle('active', x === c));
+    state.f = c.dataset.f; apply();
+  });
+  document.getElementById('dash-search').addEventListener('input', e => {
+    state.q = e.target.value.toLowerCase(); apply();
+  });
+})();
 </script>
 {% endblock %}

@@ -274,10 +274,12 @@ class QRTrustProcessor:
                 return 1.0 if a_clean == b_clean else 0.0
             return 0.0
 
-        # Name
+        # Name — only cross-check if we actually decoded a QR with a name.
+        # An absent QR is already captured by QR_NOT_FOUND; treating it as a
+        # mismatch would double-penalise the applicant.
         qr_name = (aadhaar_qr.full_name if aadhaar_qr else None) or (pan_qr.full_name if pan_qr else None)
         ocr_name = extracted_fields.get("full_name")
-        if qr_name or ocr_name:
+        if qr_name:
             score = _sim(qr_name, ocr_name)
             passed = score >= name_thresh
             matches.append(QRDataMatch(
@@ -287,10 +289,10 @@ class QRTrustProcessor:
             if not passed:
                 flags.append(QRTrustFlag.QR_NAME_MISMATCH)
 
-        # DOB
+        # DOB — same rule: skip when no QR was decoded.
         qr_dob = (aadhaar_qr.date_of_birth if aadhaar_qr else None) or (pan_qr.date_of_birth if pan_qr else None)
         ocr_dob = extracted_fields.get("date_of_birth")
-        if qr_dob or ocr_dob:
+        if qr_dob:
             score = _exact(qr_dob, ocr_dob)
             passed = score == 1.0
             matches.append(QRDataMatch(

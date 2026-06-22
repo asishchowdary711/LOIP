@@ -4,7 +4,7 @@ import logging
 import os
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from loip.domains.human_review.schemas import (
@@ -51,49 +51,33 @@ def _collect_evidence_chains(decision) -> list:
     return chains
 
 
+# Per user request: /ui and /ui/queue serve the Claude-generated standalone
+# Review Console (a self-contained React bundle with hard-coded sample data).
+# No live data wiring on these two pages; the live case-detail page at
+# /ui/review/{case_id} still renders against review_processor.
+_STANDALONE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "LOIP Review Console (standalone).html",
+)
+
+
 @router.get("", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
-    cases = review_processor.get_queue(
-        ReviewQueueFilters(sort_by="risk_score", sort_order="desc", page_size=100)
-    )
-    summary = review_processor.get_queue_summary()
-
-    by_decision = {Decision.APPROVE: 0, Decision.REVIEW: 0, Decision.REJECT: 0}
-    foirs, cibils, risks = [], [], []
-    for case in cases:
-        by_decision[case.system_decision] = by_decision.get(case.system_decision, 0) + 1
-        if case.foir is not None:
-            foirs.append(case.foir)
-        if case.cibil_score is not None:
-            cibils.append(case.cibil_score)
-        if case.risk_score is not None:
-            risks.append(case.risk_score)
-
-    stats = {
-        "total": len(cases),
-        "approve": by_decision.get(Decision.APPROVE, 0),
-        "review": by_decision.get(Decision.REVIEW, 0),
-        "reject": by_decision.get(Decision.REJECT, 0),
-        "avg_foir": (sum(foirs) / len(foirs)) if foirs else 0.0,
-        "avg_cibil": (sum(cibils) / len(cibils)) if cibils else 0.0,
-        "avg_risk": (sum(risks) / len(risks)) if risks else 0.0,
-    }
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={"stats": stats, "summary": summary, "cases": cases, "active_page": "dashboard"},
+    # no-store keeps the browser from holding an old copy of the standalone
+    # while we iterate on the HTML; otherwise edits look "not applied" until
+    # a hard reload.
+    return FileResponse(
+        _STANDALONE_PATH,
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
     )
 
 
-@router.get("/queue", response_class=HTMLResponse)
+@router.get("/queue")
 async def queue_page(request: Request):
-    cases = review_processor.get_queue(ReviewQueueFilters(sort_by="risk_score", sort_order="desc"))
-    summary = review_processor.get_queue_summary()
-    return templates.TemplateResponse(
-        request=request,
-        name="queue.html",
-        context={"request": request, "cases": cases, "summary": summary, "active_page": "queue"},
-    )
+    # The standalone is a hash-routed SPA — point /ui/queue at the same file
+    # with #queue so the in-page router lands on the Queue screen.
+    return RedirectResponse(url="/ui#queue", status_code=307)
 
 
 @router.get("/review/{case_id}", response_class=HTMLResponse)

@@ -654,6 +654,38 @@ async def submit_application(
         if decision.decision == Decision.APPROVE:
             decision.decision = Decision.REVIEW
 
+    # Demo decision rule (real-mode only): the four uploaded documents drive a
+    # three-way outcome regardless of the underlying ML approve/review/reject:
+    #   - all 4 classes extracted + no tamper/fraud → human approval needed
+    #   - one or more of the 4 classes missing       → under review
+    #   - any tamper flag or fraud_score > threshold → rejected
+    # This keeps the demo's narrative honest: the model never silently auto-
+    # approves a loan, and any flagged document is visibly rejected.
+    decision_label = None
+    if real_active:
+        EXPECTED_CLASSES = {"pan", "aadhaar", "salary_slip", "bank_statement"}
+        passed_classes = set(extracted_fields.keys()) & EXPECTED_CLASSES
+        missing_classes = EXPECTED_CLASSES - passed_classes
+
+        identity_obj = getattr(decision, "identity_result", None)
+        fraud_obj = getattr(decision, "fraud_result", None)
+        tamper_flags = list(getattr(identity_obj, "tamper_flags", []) or [])
+        fraud_score = getattr(fraud_obj, "fraud_score", 0.0) or 0.0
+        FRAUD_THRESHOLD = 0.60
+
+        if tamper_flags or fraud_score > FRAUD_THRESHOLD:
+            decision.decision = Decision.REJECT
+            decision_label = "Application Rejected"
+        elif missing_classes:
+            decision.decision = Decision.REVIEW
+            decision.review_flags = list(decision.review_flags) + [
+                f"documents_missing:{','.join(sorted(missing_classes))}"
+            ]
+            decision_label = "Under Review"
+        else:
+            decision.decision = Decision.REVIEW
+            decision_label = "Human Approval Required"
+
     # Make sure the case is in the admin queue and labelled with the real name.
     # The pipeline already enqueues review/reject cases on the shared processor;
     # if a downgrade created a new REVIEW we may need to enqueue it ourselves.
@@ -676,6 +708,7 @@ async def submit_application(
         "extracted_fields": extracted_fields,
         "mismatches": mismatches,
         "decision": decision_payload,
+        "decision_label": decision_label,
     }
 
     out_path = os.path.join(_storage_dir(), f"{application_id}.json")
@@ -697,6 +730,7 @@ async def submit_application(
         {
             "application_id": application_id,
             "decision": decision_payload.get("decision"),
+            "decision_label": decision_label,
             "risk_score": decision_payload.get("risk_score"),
             "loan_amount": decision_payload.get("loan_amount"),
             "reason_codes": decision_payload.get("reason_codes", []),

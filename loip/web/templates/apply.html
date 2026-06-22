@@ -774,8 +774,17 @@ function showDecision(res){
     review:'Your application needs a manual review. Our team will reach out shortly.',
     reject:'Unfortunately we could not approve this application at this time.',
   };
-  document.getElementById('decisionTitle').textContent=titles[d]||'Decision';
-  document.getElementById('decisionText').textContent=texts[d]||'';
+  // Demo decision label (real-mode only): overrides the generic title so the
+  // applicant sees "Human Approval Required" / "Under Review" / "Application
+  // Rejected" instead of approve/review/reject.
+  const labelTexts={
+    'Human Approval Required':'All four documents read successfully. Your application has been sent to a human approver.',
+    'Under Review':'One or more documents could not be fully read. Our team will review your application.',
+    'Application Rejected':'We detected possible tampering or fraud signals. This application has been rejected.',
+  };
+  const label=res.decision_label;
+  document.getElementById('decisionTitle').textContent=label||titles[d]||'Decision';
+  document.getElementById('decisionText').textContent=(label&&labelTexts[label])||texts[d]||'';
   const risk=res.risk_score!=null?` · Risk score ${(res.risk_score*100).toFixed(0)}/100`:'';
   // Surface high fraud score as its own decision-level callout so the user
   // sees WHY a reject happened (no longer mis-attributed to PAN).

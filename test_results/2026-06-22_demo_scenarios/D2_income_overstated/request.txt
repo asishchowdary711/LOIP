@@ -1,0 +1,12 @@
+POST http://127.0.0.1:8000/apply/submit
+  -F full_name=Vattikuti Asish Chowdary
+  -F mobile_number=7382890473
+  -F pan_number=CGYPC9928B
+  -F aadhaar_number=304288971384
+  -F employment_type=salaried
+  -F monthly_income=999999
+  -F loan_amount=320000
+  -F documents=@/Users/developer/Downloads/Projects/RealDocs/My pan-card.jpeg
+  -F documents=@/Users/developer/Downloads/Projects/RealDocs/My aadhaar 1.tiff
+  -F documents=@/Users/developer/Downloads/Projects/RealDocs/asish_payslip_May2026.pdf
+  -F documents=@/Users/developer/Downloads/Projects/RealDocs/asish_bank_statement_Mar-May2026.pdf

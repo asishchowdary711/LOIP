@@ -104,9 +104,17 @@ class IdentityTrustProcessor:
         if pan_name and aadhaar_name:
             name_pairs.append(("full_name_pan_vs_aadhaar", pan_name, aadhaar_name))
 
+        def _norm_name(s: str) -> str:
+            return " ".join(str(s).strip().upper().split())
+
         any_name_mismatch = False
         for field_name, a, b in name_pairs:
-            sim = self.bge_m3.similarity(a, b)
+            # Case/whitespace differences alone are not a mismatch — BGE-M3 is
+            # case-sensitive and would otherwise drop a perfectly matching pair
+            # like 'VATTIKUTI ASISH CHOWDARY' vs 'Vattikuti Asish Chowdary' to
+            # ~0.846 (below the 0.85 threshold).
+            na, nb = _norm_name(a), _norm_name(b)
+            sim = 1.0 if na == nb else self.bge_m3.similarity(na, nb)
             match = EntityMatch(
                 field_name=field_name,
                 sources=[],
@@ -167,10 +175,16 @@ class IdentityTrustProcessor:
                 result.tamper_flags.append(IdentityFlag.QR_TAMPERED)
                 result.mismatches.append("Document image shows signs of tampering (ELA + EXIF)")
 
-        # Confidence heuristic
+        # Confidence heuristic — only penalize a "not verified" outcome when
+        # the corresponding API was actually called. Otherwise a demo that
+        # never collects an Aadhaar OTP (no UIDAI call) would falsely show
+        # aadhaar_verified=False and dock 0.3 off every applicant.
+        api_sources = {r.source for r in result.api_results}
         score = 1.0
-        if not result.pan_verified: score -= 0.3
-        if not result.aadhaar_verified: score -= 0.3
+        if "nsdl_api" in api_sources and not result.pan_verified:
+            score -= 0.3
+        if "uidai_api" in api_sources and not result.aadhaar_verified:
+            score -= 0.3
         if selfie_img is not None and not result.face_verified: score -= 0.3
         if result.tamper_flags: score -= 0.2 * len(result.tamper_flags)
         if result.qr_trust_result is not None:

@@ -220,8 +220,18 @@
     </div>
     <div class="body">
       {% set d = (override.override_decision.value if override else system_decision) %}
+      {% set demo_label = record.get('decision_label') if record else None %}
       <div class="banner {{ final_decision }}">
-        {% if final_decision == 'approve' %}
+        {% if demo_label and not override %}
+          <h2>{{ demo_label }}</h2>
+          {% if demo_label == 'Human Approval Required' %}
+            <p>All four documents read successfully. Your application has been sent to a human approver.</p>
+          {% elif demo_label == 'Under Review' %}
+            <p>One or more documents could not be fully read. Our team will review your application.</p>
+          {% elif demo_label == 'Application Rejected' %}
+            <p>We detected possible tampering or fraud signals. This application has been rejected.</p>
+          {% endif %}
+        {% elif final_decision == 'approve' %}
           <h2>Approved ✓</h2><p>Your loan application has been approved.</p>
         {% elif final_decision == 'reject' %}
           <h2>Not approved</h2><p>Unfortunately this application could not be approved.</p>

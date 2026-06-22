@@ -1,117 +1,188 @@
 {% extends "base.html" %}
-{% block title %}Review Queue — LOIP{% endblock %}
+{% block title %}Queue — LOIP Review Console{% endblock %}
+
+{% macro gauge(value, size=176, stroke=14) -%}
+  {% set v = value if value is not none else 0 %}
+  {% set r = (size - stroke) / 2.0 %}
+  {% set circ = 6.2831853 * r %}
+  {% set frac = (v / 100.0) %}
+  {% if frac < 0 %}{% set frac = 0 %}{% endif %}
+  {% if frac > 1 %}{% set frac = 1 %}{% endif %}
+  {% set offset = circ * (1 - frac) %}
+  {% if v <= 35 %}{% set band = 'var(--approve)' %}
+  {% elif v <= 65 %}{% set band = 'var(--review)' %}
+  {% else %}{% set band = 'var(--reject)' %}{% endif %}
+  <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 {{ size }} {{ size }}" style="transform:rotate(-90deg)">
+    <circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="{{ stroke }}"/>
+    <circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="{{ band }}" stroke-width="{{ stroke }}"
+            stroke-linecap="round" stroke-dasharray="{{ circ }}" stroke-dashoffset="{{ offset }}"
+            style="filter:drop-shadow(0 0 4px {{ band }})"/>
+  </svg>
+{%- endmacro %}
+
+{% macro band_color(v) -%}
+  {%- if v <= 35 -%}var(--approve){%- elif v <= 65 -%}var(--review){%- else -%}var(--reject){%- endif -%}
+{%- endmacro %}
+
+{% macro applicant_cell(case) -%}
+  {% set initials = case.applicant_name.split()|map('first')|list %}
+  {% set ini = (initials[0] if initials else '?') ~ (initials[1] if initials|length > 1 else '') %}
+  <div class="applicant">
+    <div class="ava" style="background:linear-gradient(135deg, var(--accent), oklch(0.72 0.16 320));">{{ ini|upper }}</div>
+    <div>
+      <div class="nm">{{ case.applicant_name }}</div>
+      <div class="meta">{{ case.application_id }}</div>
+    </div>
+  </div>
+{%- endmacro %}
+
+{% macro decision_pill(d) -%}
+  <span class="pill {{ d }}"><span class="d"></span>{{ d }}</span>
+{%- endmacro %}
+
+{% macro age_label(minutes) -%}
+  {%- set m = minutes|int -%}
+  {%- if m < 60 -%}{{ m }}m
+  {%- elif m < 1440 -%}{{ (m // 60) }}h{% if m % 60 %} {{ m % 60 }}m{% endif %}
+  {%- else -%}{{ (m // 1440) }}d{% if (m // 60) % 24 %} {{ (m // 60) % 24 }}h{% endif %}
+  {%- endif -%}
+{%- endmacro %}
 
 {% block content %}
-<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
-    <div>
-        <h2 style="margin-bottom: 0.25rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em;">Review Queue</h2>
-        <p style="color: var(--muted); font-size: 0.875rem;">
-            Manage pending manual overrides and credit applications requiring audit
-        </p>
-    </div>
-</div>
+{% set pending = cases | selectattr('status.value', 'equalto', 'pending') | list | length %}
+{% set in_progress = cases | selectattr('status.value', 'equalto', 'in_progress') | list | length %}
+{% set sla_at_risk = cases | selectattr('age_in_queue_minutes', '>', 480) | list | length %}
+{% set avg_age_int = summary.avg_age_minutes|round|int if summary.avg_age_minutes else 0 %}
 
-<div class="grid-3" style="margin-bottom: 2rem;">
-    <div class="card stat-card" style="--accent-color: var(--warning);">
-        <div class="label">Pending Review</div>
-        <div class="value" style="color: var(--warning);">{{ summary.total_pending }}</div>
-    </div>
-    <div class="card stat-card" style="--accent-color: var(--info);">
-        <div class="label">In Progress</div>
-        <div class="value" style="color: var(--info);">{{ summary.total_in_progress }}</div>
-    </div>
-    <div class="card stat-card" style="--accent-color: var(--primary);">
-        <div class="label">Avg Age in Queue</div>
-        <div class="value">{{ "%.0f"|format(summary.avg_age_minutes) }}m</div>
-    </div>
-</div>
+<section id="screen-queue" class="screen active">
+  <div class="page-head">
+    <h1>Review Queue</h1>
+    <p>Manage pending manual overrides and credit applications requiring audit.</p>
+  </div>
 
-<div class="card">
-    <div style="margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
-        <h2 style="margin-bottom: 0;">Applications Under Review</h2>
-        <div style="width: 320px; position: relative;">
-            <input type="search" id="searchInput" placeholder="Search applicant, decision, status..." style="padding-left: 2.25rem;">
-            <span style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 0.85rem;">🔍</span>
-        </div>
+  <div class="queue-kpis">
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--review);box-shadow:0 0 8px var(--review)"></span>Pending review</div>
+      <div class="value tnum">{{ pending }}</div>
+      <div class="delta">unassigned</div>
     </div>
-    
-    <div style="overflow-x: auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>Applicant</th>
-                    <th>Loan Amount</th>
-                    <th>Decision</th>
-                    <th>FOIR</th>
-                    <th>CIBIL</th>
-                    <th>Risk Score</th>
-                    <th>Primary Reason</th>
-                    <th>Status</th>
-                    <th>Age</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for case in cases %}
-                <tr>
-                    <td style="font-weight: 600; color: var(--text-heading);">{{ case.applicant_name }}</td>
-                    <td style="font-weight: 500;">&#8377;{{ case.loan_amount | inr }}</td>
-                    <td>
-                        <span class="badge badge-{{ case.system_decision.value }}">
-                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:currentColor; margin-right:1px;"></span>
-                            {{ case.system_decision.value|upper }}
-                        </span>
-                    </td>
-                    <td>{% if case.foir is not none %}{{ "%.0f"|format(case.foir * 100) }}%{% else %}-{% endif %}</td>
-                    <td style="font-family: 'JetBrains Mono', monospace;">{{ case.cibil_score or '-' }}</td>
-                    <td>
-                        {% if case.risk_score is not none %}
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">{{ "%.2f"|format(case.risk_score) }}</span>
-                            <div style="width: 50px; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
-                                <div style="height: 100%; width: {{ case.risk_score * 100 }}%; background: {% if case.risk_score >= 0.7 %}var(--danger){% elif case.risk_score >= 0.35 %}var(--warning){% else %}var(--success){% endif %};"></div>
-                            </div>
-                        </div>
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
-                    <td style="font-size: 0.8rem; color: var(--muted); font-family: 'JetBrains Mono', monospace;">{{ case.primary_reason_code or '-' }}</td>
-                    <td>
-                        <span class="badge badge-{{ case.status.value }}">
-                            {{ case.status.value|replace('_', ' ')|title }}
-                        </span>
-                    </td>
-                    <td>{{ case.age_in_queue_minutes }}m</td>
-                    <td style="text-align: right;">
-                        <a href="/ui/review/{{ case.case_id }}" class="btn btn-outline" style="padding: 0.35rem 0.85rem; font-size: 0.8rem;">Review</a>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="10" style="text-align: center; color: var(--muted); padding: 3rem;">
-                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📂</div>
-                        No cases in queue
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--accent)"></span>In progress</div>
+      <div class="value tnum">{{ in_progress }}</div>
+      <div class="delta">being worked</div>
     </div>
-</div>
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--accent)"></span>Avg age in queue</div>
+      <div class="value tnum">{{ age_label(avg_age_int) }}</div>
+      <div class="delta">first-touch time</div>
+    </div>
+    <div class="tile">
+      <div class="label"><span class="dot" style="background:var(--reject);box-shadow:0 0 8px var(--reject)"></span>SLA at risk</div>
+      <div class="value tnum">{{ sla_at_risk }}</div>
+      <div class="delta">over 8h waiting</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <span class="title">Applications under review</span>
+    <div class="chips" id="q-chips">
+      <span class="chip active" data-f="all">All <span class="ct">{{ cases|length }}</span></span>
+      <span class="chip" data-f="pending">Pending <span class="ct">{{ pending }}</span></span>
+      <span class="chip" data-f="in_progress">In progress <span class="ct">{{ in_progress }}</span></span>
+    </div>
+    <select class="select" id="q-sort">
+      <option value="age">Sort: oldest first</option>
+      <option value="age_new">Sort: newest first</option>
+      <option value="risk">Sort: highest risk</option>
+      <option value="amount">Sort: largest amount</option>
+    </select>
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <input id="q-search" placeholder="Search applicant, reason, status…" />
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Applicant</th><th>Loan amount</th><th>Decision</th><th>Risk score</th>
+          <th>Primary reason</th><th>Status</th><th>Age</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="q-rows">
+        {% for case in cases %}
+          {% set risk_int = (case.risk_score * 100)|round|int if case.risk_score is not none else 0 %}
+          {% set reason = case.primary_reason_code or (case.review_flags[0] if case.review_flags else '—') %}
+          {% set status_v = case.status.value %}
+          <tr data-id="{{ case.application_id }}"
+              data-status="{{ status_v }}"
+              data-age="{{ case.age_in_queue_minutes }}"
+              data-risk="{{ risk_int }}"
+              data-amount="{{ case.loan_amount }}"
+              data-search="{{ (case.applicant_name ~ ' ' ~ (reason|string) ~ ' ' ~ status_v)|lower }}">
+            <td>{{ applicant_cell(case) }}</td>
+            <td><span class="amount tnum">₹{{ case.loan_amount|inr }}</span></td>
+            <td>{{ decision_pill(case.system_decision.value) }}</td>
+            <td>
+              <div class="risk-cell">
+                {{ gauge(risk_int, 34, 3.5) }}
+                <span class="rv" style="color:{{ band_color(risk_int) }}">{{ risk_int }}</span>
+              </div>
+            </td>
+            <td><div class="reason">{{ reason|replace('_', ' ') }}</div></td>
+            <td><span class="tag {{ 'pending' if status_v == 'pending' else 'progress' }}">{{ status_v|replace('_', ' ')|capitalize }}</span></td>
+            <td class="num">{{ age_label(case.age_in_queue_minutes) }}</td>
+            <td style="text-align:right">
+              <a class="btn btn-primary" href="/ui/review/{{ case.case_id }}">Review</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8"><div class="empty">Queue is clear — no pending applications.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 
 <script>
-    document.getElementById('searchInput').addEventListener('input', function(e) {
-        const query = e.target.value.toLowerCase();
-        const rows = document.querySelectorAll('tbody tr');
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            if (text.includes(query)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
+(function () {
+  const tbody = document.getElementById('q-rows');
+  const rows  = Array.from(tbody.querySelectorAll('tr[data-id]'));
+  const state = { f: 'all', q: '', sort: 'age' };
+
+  const sortRows = () => {
+    const sorted = [...rows].sort((a, b) => {
+      const aa = a.dataset, bb = b.dataset;
+      switch (state.sort) {
+        case 'age':     return (+bb.age) - (+aa.age);
+        case 'age_new': return (+aa.age) - (+bb.age);
+        case 'risk':    return (+bb.risk) - (+aa.risk);
+        case 'amount':  return (+bb.amount) - (+aa.amount);
+      }
+      return 0;
     });
+    sorted.forEach(r => tbody.appendChild(r));
+  };
+  const applyFilter = () => {
+    rows.forEach(r => {
+      const okF = state.f === 'all' || r.dataset.status === state.f;
+      const okQ = !state.q || r.dataset.search.includes(state.q);
+      r.style.display = (okF && okQ) ? '' : 'none';
+    });
+  };
+  document.getElementById('q-chips').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    document.querySelectorAll('#q-chips .chip').forEach(x => x.classList.toggle('active', x === c));
+    state.f = c.dataset.f; applyFilter();
+  });
+  document.getElementById('q-search').addEventListener('input', e => {
+    state.q = e.target.value.toLowerCase(); applyFilter();
+  });
+  document.getElementById('q-sort').addEventListener('change', e => {
+    state.sort = e.target.value; sortRows();
+  });
+  sortRows();
+})();
 </script>
 {% endblock %}

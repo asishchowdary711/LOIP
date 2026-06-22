@@ -26,7 +26,7 @@ class OnboardingPipeline(BasePipeline):
         self.cibil_client = CIBILClient()
         self.cibil_client._mock = mock_mode
 
-    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict, raw_documents: list[bytes] | None = None, document_store=None, event_publisher=None, identity_graph=None, vcip=None) -> OnboardingDecision:
+    async def execute(self, application: LoanApplication, images: list[np.ndarray], application_data: dict, raw_documents: list[bytes] | None = None, document_store=None, event_publisher=None, identity_graph=None, vcip=None, selfie_img: np.ndarray | None = None) -> OnboardingDecision:
         from loip.events import Topic
 
         app_id = application.application_id
@@ -73,8 +73,13 @@ class OnboardingPipeline(BasePipeline):
 
         await emit(Topic.DOCUMENT_CLASSIFIED, {"document_classes": list(extracted_data.keys())})
 
-        selfie_img = images[-1] if len(images) > 1 else None
-        doc_face_img = images[0] if images else None
+        # selfie_img must be a real selfie (e.g. from the live webcam challenge),
+        # NOT a document scan — feeding a bank-statement PDF page to MiniFASNet
+        # scores ~0 liveness and triggers a severity-0.9 fraud signal that hard-
+        # rejects the application. Callers without a selfie pass None.
+        doc_face_img = images_by_class.get("aadhaar")
+        if doc_face_img is None:
+            doc_face_img = images_by_class.get("pan")
 
         identity_result = await self.identity_processor.verify_identity(
             application.application_id,
